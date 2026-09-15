@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Credentials & secrets
+client_secret*.json
+*.secret.json
+token.json
+.env
+
+# Downloaded bulk reports
+*.csv
