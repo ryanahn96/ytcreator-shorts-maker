@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/*
+ * Scenario workspace layout. Narrow screens stack everything. From lg the
+ * preview gets its own column and stays pinned below the header while the
+ * other columns scroll; from xl the Look controls get a middle column.
+ * --preview-w sizes the 9:16 frame so the whole preview panel (frame,
+ * transport and hint) fits in the viewport height.
+ */
+.studio-grid {
+  --preview-w: min(440px, max(240px, calc((100vh - 18rem) * 9 / 16)));
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.studio-grid > * {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .studio-grid {
+    grid-template-columns: minmax(0, 1fr) calc(var(--preview-w) + 2rem);
+  }
+
+  .studio-editors {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .studio-controls {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .studio-preview {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 5rem;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+  }
+}
+
+@media (min-width: 1280px) {
+  .studio-grid {
+    grid-template-columns:
+      minmax(0, 1fr) minmax(320px, 380px) calc(var(--preview-w) + 2rem);
+  }
+
+  .studio-controls {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .studio-preview {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+.studio-frame {
+  width: 100%;
+}
+
+/* Full screen: the frame as large as the screen allows, controls below. */
+.studio-stage:fullscreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #000;
+  overflow: hidden;
+}
+
+.studio-stage:fullscreen > * {
+  margin: 0;
+}
+
+.studio-stage:fullscreen .studio-frame,
+.studio-stage:fullscreen .studio-controls-bar {
+  width: min(100vw - 2rem, calc((100vh - 7rem) * 9 / 16));
+}
+
+.studio-stage:fullscreen .studio-hint {
+  display: none;
+}

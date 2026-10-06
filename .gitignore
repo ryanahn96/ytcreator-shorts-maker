@@ -6,8 +6,12 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# Virtual environments & caches
 .venv
+.vite/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # Credentials & secrets
 client_secret*.json
@@ -15,5 +19,6 @@ client_secret*.json
 token.json
 .env
 
-# Downloaded bulk reports
-*.csv
+# Local media files
+*.mp4
+

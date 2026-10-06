@@ -1,0 +1,10 @@
+# Keep host builds and secrets out of the image. Without this,
+# `COPY frontend/ ./` would overwrite the node_modules installed by `npm ci`.
+.git
+.env
+.venv
+.ruff_cache
+**/__pycache__
+frontend/node_modules
+frontend/dist
+*.mp4

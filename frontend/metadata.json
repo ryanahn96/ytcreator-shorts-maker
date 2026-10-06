@@ -1,0 +1,8 @@
+{
+  "name": "Agentic Shortform Jumpcut Studio",
+  "description": "에이전틱 비디오 이해(Agentic Video Understanding) 기반 9:16 숏폼 점프컷 · J-Cut · 키네틱 자막 다중 시나리오 스튜디오",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
