@@ -40,8 +40,8 @@ import {
 } from './ui';
 
 const FIT_OPTIONS = [
-  {value: 'box', label: '자유 크기 (박스)'},
-  {value: 'full', label: '전체 화면 (9:16)'},
+  {value: 'box', label: '박스'},
+  {value: 'full', label: '전체 화면'},
 ] as const;
 
 const BOX_PRESETS: readonly {
@@ -102,7 +102,7 @@ function HeadlineLines(props: {
               onChange={(event) =>
                 onChange(lines.map((item, at) => (at === index ? event.target.value : item)))
               }
-              placeholder="비우면 표시하지 않아요"
+              placeholder="헤드라인 입력"
               className={`${TEXT_FIELD} h-10 min-w-0 flex-1`}
             />
             <IconButton
@@ -151,7 +151,7 @@ function VideoBoxFields(props: {
     <div className="space-y-3 rounded-2xl bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-on-surface-variant">
-          화면 크기·위치 (각진 모서리)
+          화면 크기·위치
         </span>
         <div className="flex items-center gap-1">
           <Button variant="text" size="sm" onClick={centerBox}>
@@ -226,9 +226,6 @@ function VideoBoxFields(props: {
         format={(val) => `${Math.round(val)}px`}
         onChange={(y) => update({y})}
       />
-      <p className="text-[11px] text-on-surface-variant/80">
-        미리보기 화면에서 영상 테두리나 모서리를 드래그해 크기와 위치를 직접 조절할 수도 있어요.
-      </p>
     </div>
   );
 }
@@ -242,7 +239,7 @@ function CropSliders(props: {
   return (
     <div className="space-y-3">
       <SliderField
-        label="영상 안쪽 확대 (Zoom)"
+        label="확대"
         value={region.zoom}
         min={1}
         max={props.maxZoom}

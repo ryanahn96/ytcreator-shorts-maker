@@ -59,12 +59,6 @@ export function AnalyzingScreen(props: {
         <p className="text-sm text-on-surface-variant tabular-nums">
           {formatLength(elapsedSec)}
         </p>
-        <p
-          title={progress.thought}
-          className="h-5 w-full truncate text-sm text-on-surface-variant/70"
-        >
-          {progress.thought}
-        </p>
       </div>
       <Button variant="outlined" onClick={props.onCancel}>
         중단

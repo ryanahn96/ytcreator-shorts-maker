@@ -46,42 +46,8 @@ import {
   Toggle,
 } from './ui';
 
-type PickMode = 'direct' | 'start' | 'end' | 'split' | 'cut' | 'text';
 type Tone = 'selected' | 'scenario' | 'none';
 type FilterScope = 'all' | 'clip';
-
-const MODES: readonly {mode: PickMode; label: string; hint: string}[] = [
-  {
-    mode: 'direct',
-    label: '바로 편집',
-    hint: '단어를 누르면 글자 수정·삭제·시작/끝점·나누기 메뉴가 바로 열려요.',
-  },
-  {
-    mode: 'text',
-    label: '글자 수정',
-    hint: '단어를 누르면 자막 글자를 바로 고칠 수 있어요.',
-  },
-  {
-    mode: 'cut',
-    label: '단어 삭제',
-    hint: '단어를 누르면 음성과 자막에서 빠지고, 다시 누르면 돌아와요.',
-  },
-  {
-    mode: 'start',
-    label: '시작점',
-    hint: '단어를 누르면 고른 클립이 그 단어에서 시작해요.',
-  },
-  {
-    mode: 'end',
-    label: '끝점',
-    hint: '단어를 누르면 고른 클립이 그 단어까지 이어져요.',
-  },
-  {
-    mode: 'split',
-    label: '나누기',
-    hint: '고른 클립 안의 단어를 누르면 그 단어 앞에서 클립을 둘로 나눠요.',
-  },
-];
 
 const TONE_CLASS: Record<Tone, string> = {
   selected: 'bg-primary-container text-on-primary-container font-medium',
@@ -133,41 +99,6 @@ function scrollToWord(container: HTMLElement, wordIndex: number, reveal = false)
   });
 }
 
-function WordInput(props: {
-  word: TranscriptWord;
-  initial: string;
-  onDone: (word: TranscriptWord, text: string | undefined) => void;
-}) {
-  const [text, setText] = useState(props.initial);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const done = useRef(false);
-  useEffect(() => inputRef.current?.focus({preventScroll: true}), []);
-  const finish = (value: string | undefined) => {
-    if (!done.current) {
-      done.current = true;
-      props.onDone(props.word, value);
-    }
-  };
-  return (
-    <input
-      ref={inputRef}
-      aria-label="자막 글자"
-      value={text}
-      size={Math.max(2, text.length + 1)}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={() => finish(text)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          finish(text);
-        } else if (event.key === 'Escape') {
-          finish(undefined);
-        }
-      }}
-      className="mx-0.5 rounded-md border border-primary bg-surface px-1 text-on-surface focus:outline-none"
-    />
-  );
-}
-
 const WordItem = memo(function WordItem(props: {
   word: TranscriptWord;
   override: string | undefined;
@@ -175,16 +106,9 @@ const WordItem = memo(function WordItem(props: {
   cut: boolean;
   active: boolean;
   playing: boolean;
-  editing: boolean;
   onPick: (word: TranscriptWord) => void;
-  onEditDone: (word: TranscriptWord, text: string | undefined) => void;
 }) {
   const {word, override} = props;
-  if (props.editing) {
-    return (
-      <WordInput word={word} initial={override ?? word.text} onDone={props.onEditDone} />
-    );
-  }
   const hidden = override === '';
   const edited = override !== undefined && !hidden;
   const styles = [
@@ -218,7 +142,7 @@ const WordItem = memo(function WordItem(props: {
   );
 });
 
-/** Inline action bar shown when a word is clicked in 'direct' (바로 편집) mode. */
+/** Inline action bar shown when a word is clicked. */
 function DirectWordBar(props: {
   word: TranscriptWord;
   override: string | undefined;
@@ -249,9 +173,7 @@ function DirectWordBar(props: {
           <span className="rounded bg-primary-container px-1.5 py-0.5 font-medium text-on-primary-container tabular-nums">
             {formatClock(word.startSec)}
           </span>
-          <span>
-            원문: <strong className="text-on-surface">{word.text}</strong>
-          </span>
+          <strong className="text-on-surface">{word.text}</strong>
         </div>
         <IconButton label="닫기" icon="close" size="sm" onClick={props.onClose} />
       </div>
@@ -266,7 +188,6 @@ function DirectWordBar(props: {
               props.onClose();
             }
           }}
-          placeholder="비우면 자막에서만 숨겨요"
           className={`${TEXT_FIELD} h-8 min-w-[140px] flex-1 text-xs`}
         />
         <Button variant="tonal" size="sm" onClick={applyText}>
@@ -289,7 +210,7 @@ function DirectWordBar(props: {
           }`}
         >
           <Icon name={cut ? 'undo' : 'delete'} size={15} />
-          {cut ? '삭제 취소 (복구)' : '음성·자막에서 삭제'}
+          {cut ? '복구' : '삭제'}
         </button>
         {props.canSetRange && (
           <>
@@ -298,14 +219,14 @@ function DirectWordBar(props: {
               onClick={props.onSetStart}
               className={`inline-flex h-7 items-center gap-1 rounded-lg border border-outline-variant px-2.5 text-xs font-medium text-on-surface ${STATE_LAYER}`}
             >
-              여기서 클립 시작
+              클립 시작
             </button>
             <button
               type="button"
               onClick={props.onSetEnd}
               className={`inline-flex h-7 items-center gap-1 rounded-lg border border-outline-variant px-2.5 text-xs font-medium text-on-surface ${STATE_LAYER}`}
             >
-              여기서 클립 끝
+              클립 끝
             </button>
             <button
               type="button"
@@ -313,7 +234,7 @@ function DirectWordBar(props: {
               className={`inline-flex h-7 items-center gap-1 rounded-lg border border-outline-variant px-2.5 text-xs font-medium text-on-surface ${STATE_LAYER}`}
             >
               <Icon name="content_cut" size={14} />
-              클립 나누기
+              나누기
             </button>
           </>
         )}
@@ -443,11 +364,9 @@ export function TranscriptPanel(props: {
   dispatch: Dispatch<EditorAction>;
 }) {
   const {transcript, clips, clipIndex, edits, playbackState, dispatch} = props;
-  const [mode, setMode] = useState<PickMode>('direct');
   const [filterScope, setFilterScope] = useState<FilterScope>('all');
   const [query, setQuery] = useState('');
   const [quickStyleOpen, setQuickStyleOpen] = useState(false);
-  const [editing, setEditing] = useState<number | null>(null);
   const [activeWordIndex, setActiveWordIndex] = useState<number | null>(null);
   const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null);
   const [lineDraft, setLineDraft] = useState('');
@@ -528,8 +447,7 @@ export function TranscriptPanel(props: {
 
   // Smoothly auto-scroll the active transcript line into view during playback,
   // unless the user is actively editing a word or line.
-  const userIsEditing =
-    editing !== null || activeWordIndex !== null || editingLineIndex !== null;
+  const userIsEditing = activeWordIndex !== null || editingLineIndex !== null;
   useEffect(() => {
     if (playbackState?.playing && !userIsEditing) {
       scrollToPlayingLine();
@@ -585,27 +503,7 @@ export function TranscriptPanel(props: {
 
   const pick = (word: TranscriptWord) => {
     setNotice('');
-    if (mode === 'direct') {
-      setActiveWordIndex((prev) => (prev === word.index ? null : word.index));
-      return;
-    }
-    if (mode === 'cut') {
-      dispatch({type: 'toggleCutWord', index: word.index});
-      return;
-    }
-    if (mode === 'text') {
-      setEditing(word.index);
-      return;
-    }
-    if (mode === 'split') {
-      applySplitAt(word.startSec);
-      return;
-    }
-    if (mode === 'start') {
-      applyClipStart(word.startSec);
-      return;
-    }
-    applyClipEnd(word.endSec);
+    setActiveWordIndex((prev) => (prev === word.index ? null : word.index));
   };
 
   const latest = useRef({pick, clips, clipIndex});
@@ -613,20 +511,6 @@ export function TranscriptPanel(props: {
     latest.current = {pick, clips, clipIndex};
   });
   const onPick = useCallback((word: TranscriptWord) => latest.current.pick(word), []);
-  const onEditDone = useCallback(
-    (word: TranscriptWord, text: string | undefined) => {
-      setEditing(null);
-      if (text !== undefined) {
-        const trimmed = text.trim();
-        dispatch({
-          type: 'setWordText',
-          index: word.index,
-          text: trimmed === word.text ? null : trimmed,
-        });
-      }
-    },
-    [dispatch],
-  );
 
   // Bring the selected Clip into view when the selection changes.
   const selectedId = clips[clipIndex]?.clip.clipId;
@@ -653,12 +537,8 @@ export function TranscriptPanel(props: {
     }
     setFilterScope('all');
     scrollToWord(container, wordIndex, true);
-    if (mode === 'direct') {
-      setActiveWordIndex(wordIndex);
-    } else {
-      setEditing(wordIndex);
-    }
-  }, [focus, mode]);
+    setActiveWordIndex(wordIndex);
+  }, [focus]);
 
   const filteredLines = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -781,39 +661,6 @@ export function TranscriptPanel(props: {
         />
       )}
 
-      {/* Word Click Mode Toolbar */}
-      <div
-        className="flex flex-wrap items-center gap-1.5"
-        role="radiogroup"
-        aria-label="단어를 누르면"
-      >
-        {MODES.map((item) => {
-          const selected = item.mode === mode;
-          return (
-            <button
-              key={item.mode}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={item.hint}
-              onClick={() => {
-                setMode(item.mode);
-                setActiveWordIndex(null);
-                setNotice('');
-              }}
-              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-xs font-medium ${STATE_LAYER} ${
-                selected
-                  ? 'bg-secondary-container ps-2 text-on-secondary-container'
-                  : 'border border-outline-variant/80 text-on-surface-variant'
-              }`}
-            >
-              {selected && <Icon name="check" size={15} />}
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
       {notice && <p className="text-xs text-error">{notice}</p>}
 
       {lines.length === 0 ? (
@@ -845,7 +692,7 @@ export function TranscriptPanel(props: {
               new Set(line.words.flatMap((w) => wordClips.get(w.index) ?? [])),
             ).sort((a, b) => a - b);
             const activeWordInLine =
-              mode === 'direct' && activeWordIndex !== null
+              activeWordIndex !== null
                 ? line.words.find((w) => w.index === activeWordIndex)
                 : undefined;
             const isEditingLine = editingLineIndex === line.index;
@@ -948,9 +795,7 @@ export function TranscriptPanel(props: {
                             cut={edits.cutWords.has(word.index)}
                             active={activeWordInLine?.index === word.index}
                             playing={playingWordIndex === word.index}
-                            editing={editing === word.index}
                             onPick={onPick}
-                            onEditDone={onEditDone}
                           />
                         ))}
                       </span>

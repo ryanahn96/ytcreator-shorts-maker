@@ -294,14 +294,9 @@ function YouTubeInsightsPanel(props: {
 
   if (!hasAnyData) {
     return (
-      <div className="space-y-2 rounded-2xl bg-surface p-5 text-center">
-        <p className="text-sm font-medium text-on-surface">
-          연결된 YouTube 영상 데이터가 없어요
-        </p>
-        <p className="text-xs text-on-surface-variant">
-          첫 화면에서 내 채널의 롱폼 영상을 연결하면 시청자 유지율 곡선(많이 본
-          피크 구간 · 이탈 구간)과 실제 시청자 댓글 반응을 여기서 바로 확인하고
-          클립으로 추가할 수 있습니다.
+      <div className="rounded-2xl bg-surface p-5 text-center">
+        <p className="text-sm text-on-surface-variant">
+          연결된 YouTube 영상이 없습니다
         </p>
       </div>
     );
@@ -323,15 +318,12 @@ function YouTubeInsightsPanel(props: {
   return (
     <div className="space-y-4">
       {youtubeVideoId && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-surface px-4 py-3 text-xs">
-          <span className="font-medium text-on-surface">
-            연결된 YouTube 영상 ID: <code>{youtubeVideoId}</code>
-          </span>
+        <div className="flex justify-end">
           <a
             href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             YouTube에서 열기
             <Icon name="open_in_new" size={14} />
@@ -341,14 +333,9 @@ function YouTubeInsightsPanel(props: {
 
       {/* Audience Retention Curve */}
       <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-on-surface">
-            YouTube Analytics 시청자 유지율 곡선
-          </span>
-          <span className="text-[11px] text-on-surface-variant">
-            파란 영역: 많이 본 피크 · 빨간 영역: 이탈 주의
-          </span>
-        </div>
+        <span className="block text-xs font-semibold text-on-surface">
+          시청자 유지율
+        </span>
         {retentionPoints.length > 1 ? (
           <RetentionSparkline
             points={retentionPoints}
@@ -358,7 +345,7 @@ function YouTubeInsightsPanel(props: {
           />
         ) : (
           <p className="text-xs text-on-surface-variant">
-            시청자 유지율 곡선 집계 데이터가 아직 없습니다.
+            집계된 유지율 데이터가 없습니다.
           </p>
         )}
       </div>
@@ -367,12 +354,10 @@ function YouTubeInsightsPanel(props: {
       <div className="space-y-2 rounded-2xl bg-surface p-4">
         <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
           <Icon name="insights" size={16} className="text-primary" />
-          🔥 시청자가 많이 본 피크 구간 ({retentionPeaks.length}곳)
+          많이 본 구간 ({retentionPeaks.length})
         </p>
         {retentionPeaks.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">
-            감지된 시청 집중 피크 구간이 없습니다.
-          </p>
+          <p className="text-xs text-on-surface-variant">없음</p>
         ) : (
           <div className="space-y-2">
             {retentionPeaks.map((peak, idx) => (
@@ -383,10 +368,8 @@ function YouTubeInsightsPanel(props: {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold tabular-nums">
                     {formatClock(peak.startSec)} – {formatClock(peak.endSec)} ·
-                    유지율 {Math.round(peak.watchRatio * 100)}% (상위{' '}
-                    {Math.round(peak.relativePerformance * 100)}%)
+                    유지율 {Math.round(peak.watchRatio * 100)}%
                   </p>
-                  <p className="mt-0.5 text-[11px] opacity-85">{peak.label}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
@@ -416,12 +399,10 @@ function YouTubeInsightsPanel(props: {
       <div className="space-y-2 rounded-2xl bg-surface p-4">
         <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
           <Icon name="warning" size={16} className="text-error" />
-          ⚠️ 시청자가 적게 본 · 이탈 구간 ({retentionLows.length}곳)
+          이탈 구간 ({retentionLows.length})
         </p>
         {retentionLows.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">
-            뚜렷한 시청자 이탈 구간이 감지되지 않았습니다.
-          </p>
+          <p className="text-xs text-on-surface-variant">없음</p>
         ) : (
           <div className="space-y-2">
             {retentionLows.map((low, idx) => (
@@ -432,10 +413,8 @@ function YouTubeInsightsPanel(props: {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold tabular-nums">
                     {formatClock(low.startSec)} – {formatClock(low.endSec)} ·
-                    유지율 {Math.round(low.watchRatio * 100)}% (상대{' '}
-                    {Math.round(low.relativePerformance * 100)}%)
+                    유지율 {Math.round(low.watchRatio * 100)}%
                   </p>
-                  <p className="mt-0.5 text-[11px] opacity-85">{low.label}</p>
                 </div>
                 <Button
                   variant="text"
@@ -453,20 +432,11 @@ function YouTubeInsightsPanel(props: {
 
       {/* Viewer comments */}
       <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-on-surface">
-            💬 실제 시청자 댓글 반응 ({comments.length}개)
-          </p>
-          {comments.some((c) => c.timestampSec !== null) && (
-            <span className="text-[11px] text-primary">
-              타임스탬프 클릭 시 해당 위치로 이동
-            </span>
-          )}
-        </div>
+        <p className="text-xs font-semibold text-on-surface">
+          댓글 ({comments.length})
+        </p>
         {comments.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">
-            표시할 공개 댓글이 없습니다.
-          </p>
+          <p className="text-xs text-on-surface-variant">없음</p>
         ) : (
           <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
             {comments.map((comment) => (
@@ -529,15 +499,7 @@ function CostChip(props: {report: AnalysisReport}) {
   const {costUsd, elapsedSec} = props.report;
   const time = formatDuration(elapsedSec);
   return (
-    <span
-      title={
-        costUsd === null
-          ? '이번 분석에 걸린 시간이에요. 비용은 계산할 수 없어서 빠졌어요.'
-          : '이번 분석의 예상 비용과 걸린 시간이에요. 비용은 공개된 Gemini 정가로 ' +
-            '계산해서 실제 청구액과 다를 수 있어요.'
-      }
-      className="inline-flex h-8 shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[13px] text-on-surface-variant tabular-nums max-sm:hidden"
-    >
+    <span className="inline-flex h-8 shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[13px] text-on-surface-variant tabular-nums max-sm:hidden">
       {costUsd === null ? time : `${formatCost(costUsd)} · ${time}`}
     </span>
   );
@@ -782,7 +744,7 @@ export function EditorScreen(props: {
     requestFocus(target);
   };
 
-  const runningText = running ? running.thought || statusLine(running.stage) : '';
+  const runningText = running ? statusLine(running.stage) : '';
 
   return (
     <div className="flex flex-1 flex-col">

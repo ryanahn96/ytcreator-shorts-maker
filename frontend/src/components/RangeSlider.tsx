@@ -352,11 +352,6 @@ export function RangeSlider(props: {
       </div>
       <div className="mt-1 flex justify-between text-[11px] text-on-surface-variant tabular-nums">
         <span>{formatClock(bounds.startSec)}</span>
-        <span className="text-on-surface-variant/80">
-          {props.retentionPoints && props.retentionPoints.length > 1
-            ? '곡선: 시청 유지율 · 가운데 영역 드래그로 구간 이동'
-            : '가운데 영역을 드래그해 구간을 통째로 앞뒤로 옮길 수 있어요'}
-        </span>
         <span>{formatClock(bounds.endSec)}</span>
       </div>
     </div>

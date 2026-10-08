@@ -37,27 +37,10 @@ const PRIVACY_OPTIONS: readonly {value: YouTubePrivacy; label: string}[] = (
 ).map((value) => ({value, label: PRIVACY_LABELS[value]}));
 
 const QUALITY_OPTIONS: readonly {value: RenderQuality; label: string}[] = [
-  {value: '1080p', label: '1080p FHD'},
-  {value: '1440p', label: '1440p QHD (권장)'},
-  {value: '2160p', label: '4K UHD 최고화질'},
+  {value: '1080p', label: '1080p'},
+  {value: '1440p', label: '1440p (권장)'},
+  {value: '2160p', label: '4K'},
 ];
-
-const QUALITY_SPECS: Readonly<
-  Record<RenderQuality, {resolution: string; detail: string}>
-> = {
-  '1080p': {
-    resolution: '1080×1920 MP4',
-    detail: '표준 FHD · 고비트레이트 H.264',
-  },
-  '1440p': {
-    resolution: '1440×2560 MP4',
-    detail: '고화질 QHD · 박스 안 1080p 원본 선명도 유지',
-  },
-  '2160p': {
-    resolution: '2160×3840 MP4',
-    detail: '최고화질 4K UHD · 원본 픽셀 100% 보존',
-  },
-};
 
 // Characters Windows and macOS do not allow in file names.
 const RESERVED_CHARS = new Set([...'\\/:*?"<>|']);
@@ -164,7 +147,7 @@ function YouTubeDirectUpload(props: {
       ) : (
         <>
           <label className="block space-y-1 text-xs text-on-surface-variant">
-            <span>제목 (최대 100자)</span>
+            <span>제목</span>
             <input
               type="text"
               maxLength={100}
@@ -175,7 +158,7 @@ function YouTubeDirectUpload(props: {
             />
           </label>
           <label className="block space-y-1 text-xs text-on-surface-variant">
-            <span>설명 (#Shorts 자동 포함)</span>
+            <span>설명</span>
             <textarea
               rows={2}
               value={description}
@@ -240,7 +223,6 @@ export function ExportDialog(props: {
   const done = job?.status === 'done' ? job : null;
   const stale = done !== null && done.planKey !== props.planKey;
   const canRender = props.plan !== null && !running && (done === null || stale);
-  const spec = QUALITY_SPECS[quality];
   const defaultDesc = props.rationale
     ? `${props.rationale}\n\n#Shorts`
     : '#Shorts';
@@ -263,15 +245,10 @@ export function ExportDialog(props: {
       }
     >
       <div className="space-y-4">
-        <div>
-          <p className="text-base text-on-surface">{props.title}</p>
-          <p className="text-xs text-on-surface-variant tabular-nums">
-            {spec.resolution} · {spec.detail}
-          </p>
-        </div>
+        <p className="text-base text-on-surface">{props.title}</p>
         <div className="space-y-1.5">
           <span className="block text-xs font-medium text-on-surface-variant">
-            화질 (해상도)
+            화질
           </span>
           <Segmented<RenderQuality>
             label="화질 선택"
@@ -285,12 +262,7 @@ export function ExportDialog(props: {
           <Notice tone="warning">재생할 구간이 없어서 만들 수 없어요</Notice>
         )}
         {props.fontWarning !== '' && <Notice tone="warning">{props.fontWarning}</Notice>}
-        {running && (
-          <div className="space-y-2">
-            <ProgressBar label="MP4 만들기" />
-            <p>MP4를 만들고 있어요</p>
-          </div>
-        )}
+        {running && <ProgressBar label="MP4 만들기" />}
         {job?.status === 'failed' && <Notice tone="error">{job.error}</Notice>}
         {done && (
           <div className="flex flex-col items-center gap-3">

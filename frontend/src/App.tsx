@@ -56,47 +56,9 @@ function LoginScreen(props: {
         )}
         <section className="flex w-full flex-col items-center gap-6 rounded-[28px] bg-surface-container px-6 py-10 text-center sm:px-10">
           <BrandMark size={56} />
-          <div className="space-y-2">
-            <h2 className="text-2xl font-medium tracking-tight text-on-surface">
-              YouTube 크리에이터 계정으로 로그인
-            </h2>
-            <p className="text-sm text-on-surface-variant">
-              본인 YouTube 채널을 연결하면 시청자 유지율 피크 구간 분석과 Shorts
-              원클릭 업로드를 바로 사용할 수 있어요.
-            </p>
-          </div>
-          <ul className="w-full space-y-2.5 rounded-2xl bg-surface-container-low p-4 text-left text-sm text-on-surface-variant">
-            <li className="flex items-start gap-2.5">
-              <Icon name="insights" size={20} className="mt-0.5 text-primary" />
-              <span>
-                <strong className="font-medium text-on-surface">
-                  시청자 유지율(Audience Retention) 반영
-                </strong>{' '}
-                — 시청자가 가장 집중하거나 반복 재생한 피크 구간을 Gemini가 우선
-                선별해요.
-              </span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <Icon name="subtitles" size={20} className="mt-0.5 text-primary" />
-              <span>
-                <strong className="font-medium text-on-surface">
-                  채널 공식 자막 트랙 연동
-                </strong>{' '}
-                — 채널에 등록된 자막이 있으면 첫 분석 시 바로 가져와 자막 정확도를
-                높여요.
-              </span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <Icon name="upload" size={20} className="mt-0.5 text-primary" />
-              <span>
-                <strong className="font-medium text-on-surface">
-                  완성된 9:16 Shorts 바로 업로드
-                </strong>{' '}
-                — 내보내기 창에서 비공개·일부 공개·공개 상태로 내 채널에 즉시 올릴
-                수 있어요.
-              </span>
-            </li>
-          </ul>
+          <h2 className="text-2xl font-medium tracking-tight text-on-surface">
+            YouTube 계정으로 로그인
+          </h2>
           {canLogin ? (
             <a
               href={LOGIN_URL}

@@ -1,15 +1,9 @@
 # Copy to terraform.tfvars to override defaults without environment variables.
 # Do not commit terraform.tfvars (it is in .gitignore).
 
-# project_id      = "ytcreator-508301"
+# project_id      = ""
 # region          = "asia-northeast3"
-# service_name    = "ytcreator"
-
-# Google OAuth 2.0 Web Client credentials (Google Cloud Console > APIs &
-# Services > Credentials). Add <service_url>/api/shortform/auth/callback as an
-# Authorized redirect URI.
-# oauth_client_id     = "1234567890-abc.apps.googleusercontent.com"
-# oauth_client_secret = "GOCSPX-..."
+# service_name    = ""
 
 # Instance sizing and scaling.
 # cpu            = "4"

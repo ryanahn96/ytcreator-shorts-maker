@@ -195,6 +195,8 @@ Next steps for Google / YouTube OAuth 2.0 sign-in:
 1. In Google Cloud Console > APIs & Services > Credentials, create or edit an
    OAuth 2.0 Web Client and add this Authorized redirect URI:
      ${SERVICE_URL}/api/shortform/auth/callback
-2. Pass the client credentials via terraform/terraform.tfvars or environment:
-     TF_VAR_oauth_client_id='...' TF_VAR_oauth_client_secret='...' ./deploy.sh
+2. Configure credentials in .env (single source of truth):
+     GOOGLE_OAUTH_CLIENT_ID='...'
+     GOOGLE_OAUTH_CLIENT_SECRET='...'
+   deploy.sh will automatically export them to Terraform.
 EOF

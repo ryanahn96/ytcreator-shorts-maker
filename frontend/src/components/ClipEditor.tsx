@@ -465,12 +465,6 @@ function ClipRangeEditor(props: {
         onCommit={commit}
       />
       <div className="space-y-1.5 rounded-xl bg-surface-container-low p-2.5">
-        <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
-          <span>추천 영역 앞·뒤로 클립 이동 / 대사 확장</span>
-          <span className="tabular-nums">
-            길이 {(clip.endSec - clip.startSec).toFixed(1)}초 유지
-          </span>
-        </div>
         <div className="flex flex-wrap gap-1">
           {([-5, -1, 1, 5] as const).map((delta) => (
             <button
@@ -539,7 +533,6 @@ function ClipItem(props: {
   const {resolved, position, selected, peak, low, dispatch} = props;
   const {clip, planIndex, words} = resolved;
   const mediaKind = clip.mediaKind ?? 'source';
-  const details = [clip.speaker, clip.purpose].filter((text) => text.trim());
   const itemRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -603,9 +596,6 @@ function ClipItem(props: {
             </span>
           )}
         </span>
-        {details.length > 0 && (
-          <span className="block text-xs opacity-80">{details.join(' · ')}</span>
-        )}
         {mediaKind === 'source' && (
           <span className="line-clamp-2 block text-[13px] leading-5">
             {words.length > 0
@@ -712,7 +702,7 @@ export function ClipEditor(props: {
       {mediaError && <p className="mb-2 px-2 text-xs text-error">{mediaError}</p>}
       {clips.length === 0 ? (
         <p className="px-2 pb-2 text-sm text-on-surface-variant">
-          클립이 없어요. 클립을 추가하거나 Gemini 제안으로 되돌려 보세요.
+          클립이 없습니다.
         </p>
       ) : (
         <ol className="space-y-2">

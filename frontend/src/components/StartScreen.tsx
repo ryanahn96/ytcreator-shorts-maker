@@ -252,7 +252,6 @@ export function RetentionSparkline(props: {
 
 function YouTubeChannelLinkSection(props: {
   videoId: string;
-  localFilename: string;
   durationSec: number;
   hasUploadedFile: boolean;
   onChange: (videoId: string) => void;
@@ -260,7 +259,6 @@ function YouTubeChannelLinkSection(props: {
 }) {
   const {
     videoId,
-    localFilename,
     durationSec,
     hasUploadedFile,
     onChange,
@@ -274,7 +272,6 @@ function YouTubeChannelLinkSection(props: {
   const [context, setContext] = useState<YouTubeVideoContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
-  const [tunedNotice, setTunedNotice] = useState(false);
   const autoMatchedDurationRef = useRef<number>(0);
 
   const loadList = () => {
@@ -330,7 +327,6 @@ function YouTubeChannelLinkSection(props: {
 
   useEffect(() => {
     setManualInput(videoId);
-    setTunedNotice(false);
     if (!videoId) {
       setContext(null);
       setContextError(null);
@@ -395,9 +391,7 @@ function YouTubeChannelLinkSection(props: {
           className="transition-transform group-open:rotate-180"
         />
         <Icon name="insights" size={18} className="text-primary" />
-        <span>
-          내 채널 롱폼 영상 연결 (시청 유지율 · 실제 댓글 · 공식 자막 연동)
-        </span>
+        <span>내 채널 영상 연결</span>
         {videoId && (
           <span className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-secondary-container px-3 py-1 text-xs font-medium text-on-secondary-container">
             <Icon name="check" size={14} />
@@ -408,80 +402,10 @@ function YouTubeChannelLinkSection(props: {
         )}
       </summary>
       <div className="space-y-4 px-6 pb-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-on-surface-variant">
-            <code>#shorts</code>가 없는 롱폼 영상만 최신 업로드 날짜순으로
-            표시됩니다. 업로드한 파일과 영상 길이가 일치하는 최신 영상을 자동으로
-            찾아 연결합니다.
-          </p>
-          <span className="rounded-full bg-surface-container-highest px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant">
-            정렬: 최신 업로드순 · #shorts 제외
-          </span>
-        </div>
-
-        {/* Side-by-side comparison banner when both local file and YouTube video are present */}
-        {durationSec > 0 && (context || selectedItem) && (
-          <div
-            className={`rounded-2xl border p-4 ${
-              linkedDurationMatches
-                ? 'border-primary/50 bg-primary-container/25'
-                : 'border-outline-variant bg-surface'
-            }`}
-          >
-            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-                <Icon
-                  name={linkedDurationMatches ? 'check' : 'warning'}
-                  size={16}
-                  className="text-primary"
-                />
-                {linkedDurationMatches
-                  ? `🎯 업로드한 파일과 YouTube 영상 길이가 일치합니다 (오차 ${(durationDiffSec ?? 0).toFixed(1)}초)`
-                  : `업로드한 파일과 선택된 YouTube 영상 비교 (길이 차이 ${(durationDiffSec ?? 0).toFixed(1)}초)`}
-              </span>
-              <a
-                href={`https://www.youtube.com/watch?v=${videoId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                YouTube에서 영상 열기
-                <Icon name="open_in_new" size={14} />
-              </a>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-surface/90 p-3">
-                <p className="text-[11px] font-medium text-on-surface-variant">
-                  업로드한 로컬 파일
-                </p>
-                <p className="mt-0.5 truncate text-sm font-semibold text-on-surface">
-                  {localFilename || '선택된 영상 파일'}
-                </p>
-                <p className="mt-1 text-xs text-on-surface-variant tabular-nums">
-                  길이: <strong>{formatClock(durationSec)}</strong> (
-                  {formatLength(durationSec)})
-                </p>
-              </div>
-              <div className="rounded-xl bg-surface/90 p-3">
-                <p className="text-[11px] font-medium text-on-surface-variant">
-                  연결된 YouTube 채널 영상
-                </p>
-                <p className="mt-0.5 truncate text-sm font-semibold text-on-surface">
-                  {context?.title || selectedItem?.title || videoId}
-                </p>
-                <p className="mt-1 text-xs text-on-surface-variant tabular-nums">
-                  길이:{' '}
-                  <strong>
-                    {linkedDurationSec > 0
-                      ? formatClock(linkedDurationSec)
-                      : '-'}
-                  </strong>
-                  {(context?.publishedAt || selectedItem?.publishedAt) &&
-                    ` · 업로드: ${formatPublishedDate(context?.publishedAt || selectedItem?.publishedAt)}`}
-                </p>
-              </div>
-            </div>
-          </div>
+        {durationSec > 0 && linkedDurationSec > 0 && !linkedDurationMatches && (
+          <Notice tone="warning">
+            {`업로드한 파일(${formatClock(durationSec)})과 연결된 YouTube 영상(${formatClock(linkedDurationSec)})의 길이가 다릅니다 (차이 ${(durationDiffSec ?? 0).toFixed(1)}초).`}
+          </Notice>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
@@ -520,13 +444,11 @@ function YouTubeChannelLinkSection(props: {
             disabled={loadingList}
             onClick={loadList}
           >
-            채널 영상 새로고침
+            새로고침
           </Button>
         </div>
 
-        {loadingContext && (
-          <ProgressBar label="YouTube 시청 유지율 · 댓글 · 공식 자막 조회 중" />
-        )}
+        {loadingContext && <ProgressBar label="YouTube 데이터 조회 중" />}
         {contextError && <Notice tone="warning">{contextError}</Notice>}
 
         {/* Linked Video Analytics & Comments Panel */}
@@ -556,51 +478,29 @@ function YouTubeChannelLinkSection(props: {
                   {typeof context.commentCount === 'number' &&
                     `댓글 ${context.commentCount.toLocaleString()}개 · `}
                   {context.captionWords.length > 0
-                    ? `공식 자막 연동됨 (${context.captionWords.length}단어)`
-                    : '공식 자막 없음 (음성에서 자동 추출)'}
+                    ? `공식 자막 (${context.captionWords.length}단어)`
+                    : '공식 자막 없음'}
                 </p>
               </div>
               <Button
                 variant="filled"
                 size="sm"
                 icon="tune"
-                onClick={() => {
-                  onTunePrompt(context);
-                  setTunedNotice(true);
-                }}
+                onClick={() => onTunePrompt(context)}
               >
                 ✨ 데이터로 편집 요청 튜닝
               </Button>
             </div>
 
-            {tunedNotice && (
-              <div className="flex items-start justify-between gap-2 rounded-2xl bg-secondary-container px-4 py-3 text-xs text-on-secondary-container">
-                <span>
-                  연결된 영상의 시청 유지율 피크·이탈 구간과 실제 시청자 댓글을
-                  반영해 아래 <strong>편집 요청 바꾸기</strong> 프롬프트를
-                  튜닝했어요. 분석을 시작하기 전에 자유롭게 문구를 수정할 수
-                  있습니다.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setTunedNotice(false)}
-                  aria-label="알림 닫기"
-                  className="shrink-0 rounded-full p-0.5 hover:bg-black/10"
-                >
-                  <Icon name="close" size={16} />
-                </button>
-              </div>
-            )}
-
             {context.retentionPoints.length > 1 ? (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-on-surface-variant">
                   <span className="font-medium text-on-surface">
-                    YouTube Analytics 시청자 유지율 곡선
+                    시청자 유지율
                   </span>
                   <span>
-                    피크 {context.retentionPeaks.length}곳 · 이탈 주의{' '}
-                    {(context.retentionLows ?? []).length}곳
+                    피크 {context.retentionPeaks.length} · 이탈{' '}
+                    {(context.retentionLows ?? []).length}
                   </span>
                 </div>
                 <RetentionSparkline
@@ -612,8 +512,7 @@ function YouTubeChannelLinkSection(props: {
               </div>
             ) : (
               <p className="text-xs text-on-surface-variant">
-                시청자 유지율 집계 데이터가 아직 없어요 (신규·비공개 영상일 수
-                있어요).
+                집계된 유지율 데이터가 없습니다.
               </p>
             )}
 
@@ -624,12 +523,10 @@ function YouTubeChannelLinkSection(props: {
                 <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
                     <Icon name="insights" size={16} className="text-primary" />
-                    🔥 시청자가 많이 본 구간 (Shorts 우선 추천)
+                    많이 본 구간
                   </p>
                   {context.retentionPeaks.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">
-                      감지된 피크 구간이 없습니다.
-                    </p>
+                    <p className="text-xs text-on-surface-variant">없음</p>
                   ) : (
                     <div className="space-y-1.5">
                       {context.retentionPeaks.map((peak, index) => (
@@ -643,13 +540,9 @@ function YouTubeChannelLinkSection(props: {
                               {formatClock(peak.endSec)}
                             </span>
                             <span>
-                              유지율 {Math.round(peak.watchRatio * 100)}% (상위{' '}
-                              {Math.round(peak.relativePerformance * 100)}%)
+                              유지율 {Math.round(peak.watchRatio * 100)}%
                             </span>
                           </div>
-                          <p className="mt-0.5 text-[11px] opacity-85">
-                            {peak.label}
-                          </p>
                         </div>
                       ))}
                     </div>
@@ -659,12 +552,10 @@ function YouTubeChannelLinkSection(props: {
                 <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
                     <Icon name="warning" size={16} className="text-error" />
-                    ⚠️ 시청자가 적게 본 · 이탈 구간 (Shorts 제외 권장)
+                    이탈 구간
                   </p>
                   {(context.retentionLows ?? []).length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">
-                      뚜렷한 시청자 이탈 구간이 감지되지 않았습니다.
-                    </p>
+                    <p className="text-xs text-on-surface-variant">없음</p>
                   ) : (
                     <div className="space-y-1.5">
                       {(context.retentionLows ?? []).map((low, index) => (
@@ -678,13 +569,9 @@ function YouTubeChannelLinkSection(props: {
                               {formatClock(low.endSec)}
                             </span>
                             <span>
-                              유지율 {Math.round(low.watchRatio * 100)}% (상대{' '}
-                              {Math.round(low.relativePerformance * 100)}%)
+                              유지율 {Math.round(low.watchRatio * 100)}%
                             </span>
                           </div>
-                          <p className="mt-0.5 text-[11px] opacity-85">
-                            {low.label}
-                          </p>
                         </div>
                       ))}
                     </div>
@@ -695,22 +582,11 @@ function YouTubeChannelLinkSection(props: {
 
             {/* Viewer comments */}
             <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-on-surface">
-                  💬 실제 시청자 댓글 반응 ({(context.comments ?? []).length}개)
-                </p>
-                {(context.comments ?? []).some(
-                  (c) => c.timestampSec !== null,
-                ) && (
-                  <span className="text-[11px] text-primary">
-                    타임스탬프 언급 댓글 우선 표시
-                  </span>
-                )}
-              </div>
+              <p className="text-xs font-semibold text-on-surface">
+                댓글 {(context.comments ?? []).length}개
+              </p>
               {(context.comments ?? []).length === 0 ? (
-                <p className="text-xs text-on-surface-variant">
-                  등록된 공개 댓글이 없거나 댓글 사용이 중지된 영상입니다.
-                </p>
+                <p className="text-xs text-on-surface-variant">없음</p>
               ) : (
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
                   {(context.comments ?? []).map((comment) => (
@@ -730,7 +606,7 @@ function YouTubeChannelLinkSection(props: {
                         )}
                         {comment.timestampSec !== null && (
                           <span className="rounded-full bg-secondary-container px-2 py-0.5 font-medium text-on-secondary-container tabular-nums">
-                            ⏱ {formatClock(comment.timestampSec)} 언급
+                            ⏱ {formatClock(comment.timestampSec)}
                           </span>
                         )}
                       </div>
@@ -745,23 +621,18 @@ function YouTubeChannelLinkSection(props: {
           </div>
         )}
 
-        {loadingList && (
-          <ProgressBar label="내 채널 롱폼 영상 목록 불러오는 중" />
-        )}
+        {loadingList && <ProgressBar label="내 채널 영상 목록 불러오는 중" />}
         {listError && <Notice tone="warning">{listError}</Notice>}
         {videos !== null && !loadingList && (
           videos.length === 0 ? (
             <p className="text-xs text-on-surface-variant">
-              채널에 표시할 롱폼 영상(#shorts 제외)이 없어요.
+              표시할 채널 영상이 없습니다.
             </p>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-on-surface-variant">
-                <span className="font-medium text-on-surface">
-                  내 채널 롱폼 영상 목록 ({videos.length}개)
-                </span>
-                <span>클릭하여 업로드한 파일과 연결</span>
-              </div>
+              <span className="block text-xs font-medium text-on-surface">
+                내 채널 영상 ({videos.length}개)
+              </span>
               <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1">
                 {videos.map((item) => {
                   const selected = item.videoId === videoId;
@@ -815,12 +686,12 @@ function YouTubeChannelLinkSection(props: {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {isNewestMatch && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-on-primary">
-                              🎯 업로드한 파일과 길이 일치 · 최신 업로드
+                              자동 매칭
                             </span>
                           )}
                           {!isNewestMatch && durationMatched && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-primary/85 px-2.5 py-0.5 text-[11px] font-semibold text-on-primary">
-                              🎯 업로드한 파일과 길이 일치
+                              길이 일치
                             </span>
                           )}
                           <span className="rounded-full bg-surface-container-highest px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
@@ -828,11 +699,11 @@ function YouTubeChannelLinkSection(props: {
                           </span>
                           {item.hasCaptions && (
                             <span className="rounded-full bg-surface-container-highest px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
-                              CC 공식 자막
+                              공식 자막
                             </span>
                           )}
                           {selected && (
-                            <span className=" inline-flex items-center gap-1 rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
                               <Icon name="check" size={14} />
                               선택됨
                             </span>
@@ -858,34 +729,19 @@ function YouTubeChannelLinkSection(props: {
                         <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs opacity-85 tabular-nums">
                           {item.publishedAt && (
                             <span>
-                              업로드 {formatPublishedDate(item.publishedAt)}
-                            </span>
-                          )}
-                          {item.durationSec > 0 && (
-                            <span>
-                              · 길이 {formatClock(item.durationSec)} (
-                              {formatLength(item.durationSec)})
+                              {formatPublishedDate(item.publishedAt)}
                             </span>
                           )}
                           <span>
-                            · 조회수 {item.viewCount.toLocaleString()}회
+                            조회수 {item.viewCount.toLocaleString()}회
                           </span>
                           <span>
-                            · 좋아요 {(item.likeCount ?? 0).toLocaleString()}
+                            좋아요 {(item.likeCount ?? 0).toLocaleString()}
                           </span>
                           <span>
-                            · 댓글 {(item.commentCount ?? 0).toLocaleString()}개
-                          </span>
-                          <span className=" opacity-70">
-                            · ID: {item.videoId}
+                            댓글 {(item.commentCount ?? 0).toLocaleString()}개
                           </span>
                         </p>
-
-                        {item.description && (
-                          <p className="line-clamp-2 text-xs opacity-75">
-                            {item.description}
-                          </p>
-                        )}
                       </div>
                     </div>
                   );
@@ -1076,7 +932,6 @@ export function StartScreen(props: {
   const drop = useFileDrop(pick, () => setRejected(true));
   const ready = upload.status === 'ready';
   const durationSec = ready ? upload.source.media.durationSec : 0;
-  const localFilename = upload.status !== 'empty' ? upload.file.name : '';
 
   const handleTunePrompt = (context: YouTubeVideoContext) => {
     const tuned = buildDataTunedPrompt(props.prompt, context);
@@ -1127,7 +982,6 @@ export function StartScreen(props: {
       )}
       <YouTubeChannelLinkSection
         videoId={props.youtubeVideoId}
-        localFilename={localFilename}
         durationSec={durationSec}
         hasUploadedFile={upload.status !== 'empty'}
         onChange={props.onYoutubeVideoIdChange}
@@ -1146,7 +1000,7 @@ export function StartScreen(props: {
           <span>편집 요청 바꾸기</span>
           {props.prompt.includes(TUNED_SECTION_HEADER) && (
             <span className="ms-auto rounded-full bg-secondary-container px-3 py-0.5 text-xs font-medium text-on-secondary-container">
-              ✨ YouTube 데이터 튜닝 적용됨 (직접 수정 가능)
+              데이터 튜닝 적용됨
             </span>
           )}
         </summary>
