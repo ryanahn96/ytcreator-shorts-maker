@@ -19,11 +19,6 @@ export function lookTarget(scenario: Scenario, clipIndex: number): string | null
   return clip?.look ? clip.clipId : null;
 }
 
-/** Numbers (1-based) of the Clips that have their own Look. */
-export function ownLookClipNumbers(scenario: Scenario): number[] {
-  return scenario.clips.flatMap((clip, index) => (clip.look ? [index + 1] : []));
-}
-
 /** Whether two Text Layouts put the text at the same place. */
 export function sameTextLayout(a: Look['textLayout'], b: Look['textLayout']): boolean {
   return (

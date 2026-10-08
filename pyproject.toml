@@ -1,19 +1,15 @@
 [project]
 name = "ytcreator"
 version = "0.1.0"
-description = "Agentic Shortform Jumpcut Studio (에이전틱 숏폼 점프컷 스튜디오)"
+description = "Agentic Shorts 생성 스튜디오"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115.0",
     "google-genai>=2.23.0",
     "httpx>=0.28.0",
-    "httpx2>=2.12.0",
     "hypercorn>=0.17.3",
     "pydantic>=2.10.0",
     "python-dotenv>=1.2.3",
     "uvicorn>=0.34.0",
-    "yt-dlp>=2026.8.19",
-    "yt-dlp-ejs>=0.8.0",
 ]
-

@@ -1,7 +1,8 @@
-# Files `gcloud run deploy --source` does not upload to Cloud Build.
-# .env never leaves this machine; Cloud Run gets its settings from deploy.sh.
+# Files `gcloud builds submit` (run by deploy.sh) does not upload to Cloud Build.
+# .env never leaves this machine; Cloud Run gets its settings from terraform/.
 .gcloudignore
 .git
 .gitignore
 .ruff_cache
+terraform/
 #!include:.gitignore

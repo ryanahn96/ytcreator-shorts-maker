@@ -2,18 +2,25 @@
 
 import type {
   AnalyzeEvent,
-  AssetKind,
   AnalyzeRequest,
-  ExportOutput,
-  ExportRequest,
+  AssetKind,
+  AuthStatus,
+  LocalVideoMetadata,
   RenderOutput,
   RenderRequest,
   StudioConfig,
+  UploadCompleteRequest,
   UploadedAsset,
   UploadedSource,
+  UploadInitResponse,
+  YouTubeUploadRequest,
+  YouTubeUploadResult,
+  YouTubeVideoContext,
+  YouTubeVideoList,
 } from '../types';
 
 const API_ROOT = '/api/shortform';
+export const LOGIN_URL = `${API_ROOT}/auth/login`;
 const ANALYZE_EVENT_TYPES = new Set(['progress', 'heartbeat', 'result', 'error']);
 
 export class ApiError extends Error {}
@@ -83,12 +90,37 @@ export function getConfig(): Promise<StudioConfig> {
   return requestJson<StudioConfig>('/config');
 }
 
-export function renderPlan(body: RenderRequest): Promise<RenderOutput> {
-  return requestJson<RenderOutput>('/render', jsonInit(body));
+export function logout(): Promise<AuthStatus> {
+  return requestJson<AuthStatus>('/auth/logout', {method: 'POST'});
 }
 
-export function exportPlan(body: ExportRequest): Promise<ExportOutput> {
-  return requestJson<ExportOutput>('/export', jsonInit(body));
+export function listYouTubeVideos(): Promise<YouTubeVideoList> {
+  return requestJson<YouTubeVideoList>('/youtube/videos');
+}
+
+export function getYouTubeVideoContext(
+  videoId: string,
+  durationSec = 0,
+): Promise<YouTubeVideoContext> {
+  const params = new URLSearchParams();
+  if (durationSec > 0) {
+    params.set('duration_sec', String(durationSec));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return requestJson<YouTubeVideoContext>(
+    `/youtube/videos/${encodeURIComponent(videoId)}/context${suffix}`,
+  );
+}
+
+export function uploadShortToYouTube(
+  body: YouTubeUploadRequest,
+): Promise<YouTubeUploadResult> {
+  return requestJson<YouTubeUploadResult>('/youtube/upload', jsonInit(body));
+}
+
+/** Renders the 1080x1920 MP4 of a plan on the server. */
+export function renderPlan(body: RenderRequest): Promise<RenderOutput> {
+  return requestJson<RenderOutput>('/render', jsonInit(body));
 }
 
 function parseEvent(line: string): AnalyzeEvent {
@@ -139,11 +171,7 @@ export async function analyze(
   }
 }
 
-/**
- * Uploads the Source Video MP4 as a raw body. XHR is used because fetch
- * cannot report upload progress.
- */
-export function uploadSource(
+function uploadSourceDirect(
   file: File,
   onProgress: (loadedBytes: number) => void,
   signal: AbortSignal,
@@ -166,6 +194,76 @@ export function uploadSource(
     signal.addEventListener('abort', () => xhr.abort(), {once: true});
     xhr.send(file);
   });
+}
+
+function putToGcsSession(
+  uploadUrl: string,
+  file: File,
+  contentType: string,
+  onProgress: (loadedBytes: number) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', contentType);
+    xhr.upload.onprogress = (event) => onProgress(event.loaded);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(
+          new ApiError(`Cloud Storage 업로드에 실패했습니다 (HTTP ${xhr.status}).`),
+        );
+      }
+    };
+    xhr.onerror = () =>
+      reject(new ApiError('Cloud Storage 직접 업로드 중 네트워크 오류가 발생했습니다.'));
+    xhr.onabort = () => reject(new ApiError('업로드를 취소했습니다.'));
+    signal.addEventListener('abort', () => xhr.abort(), {once: true});
+    xhr.send(file);
+  });
+}
+
+/**
+ * Uploads the Source Video MP4 directly to GCS via a pre-authenticated
+ * resumable session URL when STUDIO_GCS_BUCKET is enabled, falling back
+ * to streaming through the backend in local development.
+ */
+export async function uploadSource(
+  file: File,
+  onProgress: (loadedBytes: number) => void,
+  signal: AbortSignal,
+  meta?: LocalVideoMetadata,
+): Promise<UploadedSource> {
+  const contentType = file.type || 'video/mp4';
+  const init = await requestJson<UploadInitResponse>(
+    '/upload-source/init',
+    jsonInit(
+      {
+        filename: file.name,
+        sizeBytes: file.size,
+        contentType,
+      },
+      signal,
+    ),
+  );
+  if (init.mode === 'gcs' && init.uploadUrl && init.sourceId) {
+    await putToGcsSession(init.uploadUrl, file, contentType, onProgress, signal);
+    const completeBody: UploadCompleteRequest = {
+      sourceId: init.sourceId,
+      filename: file.name,
+      sizeBytes: file.size,
+      durationSec: meta?.durationSec ?? 0,
+      width: meta?.width ?? 0,
+      height: meta?.height ?? 0,
+    };
+    return requestJson<UploadedSource>(
+      '/upload-source/complete',
+      jsonInit(completeBody, signal),
+    );
+  }
+  return uploadSourceDirect(file, onProgress, signal);
 }
 
 /** Uploads an image or audio file for an Image Overlay or the music. */

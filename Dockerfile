@@ -6,7 +6,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Runtime image with Python, uv, ffmpeg, and nodejs
+# Stage 2: Runtime image with Python, uv and ffmpeg
 FROM python:3.14-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -16,7 +16,6 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg \
       fonts-noto-cjk \
-      nodejs \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,7 +25,7 @@ WORKDIR /app
 
 # uv.lock records the corp PyPI mirror (Airlock, a proxy on localhost), which
 # Cloud Build cannot reach, so install the same pinned versions from PyPI.
-COPY pyproject.toml uv.lock main.py ./
+COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
     && uv venv \
     && uv pip install -r requirements.txt

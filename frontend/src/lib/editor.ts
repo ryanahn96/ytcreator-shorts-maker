@@ -8,7 +8,6 @@
 
 import type {
   AnalysisResult,
-  AudioTransition,
   BackgroundMusic,
   Clip,
   CompositionSettings,
@@ -38,20 +37,30 @@ export type EditorAction =
   | {type: 'selectScenario'; index: number}
   | {type: 'selectClip'; index: number}
   | {type: 'setClipRange'; index: number; range: TimeRange}
+  | {type: 'setClipMute'; index: number; muteAudio: boolean}
   | {type: 'moveClip'; index: number; offset: number}
   | {type: 'splitClip'; index: number; atSec: number}
   | {type: 'deleteClip'; index: number}
-  | {type: 'addClip'; range: TimeRange}
+  | {type: 'addClip'; range: TimeRange; afterIndex?: number}
+  | {
+      type: 'addMediaClip';
+      mediaKind: 'image' | 'video';
+      assetId: string;
+      range: TimeRange;
+      purpose: string;
+      afterIndex?: number;
+    }
   /** Replaces the Look at `clipId` (null: the shared Look). */
   | {type: 'setLook'; clipId: string | null; look: Look}
   | {type: 'addImage'; clipId: string | null; image: Omit<ImageOverlay, 'overlayId'>}
   /** Gives a Clip its own copy of the shared Look, or drops its own Look. */
   | {type: 'setOwnLook'; index: number; own: boolean}
-  | {type: 'setTransition'; transition: AudioTransition}
   | {type: 'setMusic'; music: BackgroundMusic | null}
   | {type: 'resetScenario'}
   | {type: 'setWordText'; index: number; text: string | null}
-  | {type: 'toggleCutWord'; index: number};
+  | {type: 'setLineWordsText'; wordIndices: readonly number[]; text: string}
+  | {type: 'toggleCutWord'; index: number}
+  | {type: 'setCaptionMaxChars'; maxChars: number};
 
 export function createEditorState(
   result: AnalysisResult,
@@ -63,7 +72,7 @@ export function createEditorState(
     scenarios: result.scenarios,
     scenarioIndex: 0,
     clipIndex: 0,
-    cutWords: new Set(result.cutWordIndices),
+    cutWords: new Set<number>(),
     wordText: new Map(),
     settings,
     sourceDurationSec: duration > 0 ? duration : Number.POSITIVE_INFINITY,
@@ -79,6 +88,21 @@ function validRange(state: EditorState, range: TimeRange): TimeRange | null {
   return endSec - startSec >= state.settings.minSubcutSec
     ? {startSec, endSec}
     : null;
+}
+
+function validMediaRange(
+  state: EditorState,
+  mediaKind: 'image' | 'video',
+  range: TimeRange,
+): TimeRange {
+  const minSec = state.settings.minSubcutSec;
+  if (mediaKind === 'image') {
+    const duration = Math.max(minSec, Math.min(60, range.endSec - range.startSec));
+    return {startSec: 0, endSec: duration};
+  }
+  const startSec = Math.max(0, range.startSec);
+  const endSec = Math.max(startSec + minSec, range.endSec);
+  return {startSec, endSec};
 }
 
 function currentScenario(state: EditorState): Scenario {
@@ -117,6 +141,22 @@ function clipAt(clips: readonly Clip[], index: number): Clip | undefined {
   return index >= 0 && index < clips.length ? clips[index] : undefined;
 }
 
+/** Inserts a new `clip` after `afterIndex` (default: the selected Clip) and selects it. */
+function insertClip(
+  state: EditorState,
+  clip: Clip,
+  afterIndex: number | undefined,
+): EditorState {
+  const clips = currentScenario(state).clips;
+  const baseIndex = afterIndex ?? state.clipIndex;
+  const at = clips.length === 0 ? 0 : Math.min(clips.length, Math.max(0, baseIndex + 1));
+  const next = [...clips.slice(0, at), clip, ...clips.slice(at)];
+  return {
+    ...withClips(state, next, at),
+    createdClips: state.createdClips + 1,
+  };
+}
+
 /** The Look at `clipId`, falling back to the shared Look. */
 function lookAt(scenario: Scenario, clipId: string | null): Look {
   return scenario.clips.find((clip) => clip.clipId === clipId)?.look ?? scenario.look;
@@ -146,12 +186,29 @@ export function editorReducer(
     case 'selectClip':
       return {...state, clipIndex: action.index};
     case 'setClipRange': {
-      const range = validRange(state, action.range);
-      if (!range || !clipAt(clips, action.index)) {
+      const target = clipAt(clips, action.index);
+      if (!target) {
+        return state;
+      }
+      const mediaKind = target.mediaKind ?? 'source';
+      const range =
+        mediaKind === 'source'
+          ? validRange(state, action.range)
+          : validMediaRange(state, mediaKind, action.range);
+      if (!range) {
         return state;
       }
       const next = clips.map((item, index) =>
         index === action.index ? {...item, ...range} : item,
+      );
+      return withClips(state, next, action.index);
+    }
+    case 'setClipMute': {
+      if (!clipAt(clips, action.index)) {
+        return state;
+      }
+      const next = clips.map((item, index) =>
+        index === action.index ? {...item, muteAudio: action.muteAudio} : item,
       );
       return withClips(state, next, action.index);
     }
@@ -205,13 +262,25 @@ export function editorReducer(
         speaker: '',
         purpose: '',
         look: null,
+        mediaKind: 'source',
+        assetId: null,
+        muteAudio: false,
       };
-      const at = clips.length === 0 ? 0 : state.clipIndex + 1;
-      const next = [...clips.slice(0, at), clip, ...clips.slice(at)];
-      return {
-        ...withClips(state, next, at),
-        createdClips: state.createdClips + 1,
+      return insertClip(state, clip, action.afterIndex);
+    }
+    case 'addMediaClip': {
+      const range = validMediaRange(state, action.mediaKind, action.range);
+      const clip: Clip = {
+        clipId: newClipId(state),
+        ...range,
+        speaker: action.mediaKind === 'image' ? '이미지' : '외부 영상',
+        purpose: action.purpose,
+        look: null,
+        mediaKind: action.mediaKind,
+        assetId: action.assetId,
+        muteAudio: false,
       };
+      return insertClip(state, clip, action.afterIndex);
     }
     case 'setLook':
       return withLook(state, action.clipId, action.look);
@@ -236,12 +305,6 @@ export function editorReducer(
       const next = clips.map((item, index) => (index === action.index ? {...item, look} : item));
       return withClips(state, next, action.index);
     }
-    case 'setTransition':
-      return withScenario(
-        state,
-        {...currentScenario(state), audioTransition: action.transition},
-        state.clipIndex,
-      );
     case 'setMusic':
       return withScenario(
         state,
@@ -259,12 +322,43 @@ export function editorReducer(
       }
       return {...state, wordText};
     }
+    case 'setLineWordsText': {
+      const {wordIndices, text} = action;
+      if (wordIndices.length === 0) {
+        return state;
+      }
+      const tokens = text
+        .trim()
+        .split(/\s+/)
+        .filter((token) => token.length > 0);
+      const wordText = new Map(state.wordText);
+      const cutWords = new Set(state.cutWords);
+      wordIndices.forEach((wordIndex, idx) => {
+        cutWords.delete(wordIndex);
+        if (tokens.length === 0) {
+          wordText.set(wordIndex, '');
+        } else if (idx < wordIndices.length - 1) {
+          wordText.set(wordIndex, tokens[idx] ?? '');
+        } else {
+          const rest = tokens.slice(idx).join(' ');
+          wordText.set(wordIndex, rest);
+        }
+      });
+      return {...state, wordText, cutWords};
+    }
     case 'toggleCutWord': {
       const cutWords = new Set(state.cutWords);
       if (!cutWords.delete(action.index)) {
         cutWords.add(action.index);
       }
       return {...state, cutWords};
+    }
+    case 'setCaptionMaxChars': {
+      const maxChars = Math.max(4, Math.min(40, Math.round(action.maxChars)));
+      return {
+        ...state,
+        settings: {...state.settings, captionMaxChars: maxChars},
+      };
     }
     default: {
       const unhandled: never = action;

@@ -6,9 +6,8 @@ frontend/src/types.ts, while Python code keeps snake_case attributes.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
-
 import string
+from typing import Annotated, Any, Literal
 
 import pydantic
 from pydantic import alias_generators
@@ -21,29 +20,33 @@ MIN_TEXT_SIZE = 16
 MAX_TEXT_SIZE = 200
 MAX_TEXT_OUTLINE = 12
 MAX_BORDER_WIDTH = 40
-MAX_TRANSITION_SEC = 1.0
 # Background Music gain is at most the file's own level (the browser
 # preview cannot boost an <audio> element either).
 MAX_MUSIC_VOLUME = 1.0
 
-# How the Transcript Words were obtained:
-#   manual_aligned: uploaded captions with timing aligned to YouTube ASR words.
-#   asr: YouTube automatic speech recognition words.
-#   manual: uploaded captions only; word timing is interpolated inside lines.
-#   gemini: no captions; Gemini transcribed the chosen Clips.
-CaptionSource = Literal['manual_aligned', 'asr', 'manual', 'gemini']
-RenderQuality = Literal['preview', 'final']
 # How the server calls Gemini:
 #   ai_studio: Gemini Developer API with GEMINI_API_KEY.
 #   vertex: Vertex AI (GOOGLE_GENAI_USE_VERTEXAI=true) with Application
 #     Default Credentials, GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION.
 GeminiBackend = Literal['ai_studio', 'vertex']
 # Files the user adds to a short besides the Source Video.
-AssetKind = Literal['image', 'audio']
+AssetKind = Literal['image', 'audio', 'video']
+# Media backing a Clip in the Scenario sequence.
+ClipMediaKind = Literal['source', 'image', 'video']
 # Where the video goes on the canvas:
-#   box: the template's 16:9 box between the Headline and the bottom area.
+#   box: the template's box (or custom VideoBoxSpec) between Headline and
+#     caption.
 #   full: the whole 9:16 canvas; text and images are drawn over the video.
 VideoFit = Literal['box', 'full']
+# How a re-analysis of an already analyzed Source Video runs:
+#   fast: text only, from the stored full transcript (no video sent).
+#   deep: the video again, through its Gemini Context Cache when one is
+#     still alive, for choices that need the picture (slides, faces, crop).
+ReanalyzeMode = Literal['fast', 'deep']
+# Visibility of a Shorts video uploaded to the creator's YouTube channel.
+YouTubePrivacy = Literal['private', 'unlisted', 'public']
+# Output resolution preset for MP4 rendering.
+RenderQuality = Literal['1080p', '1440p', '2160p']
 
 
 class StudioModel(pydantic.BaseModel):
@@ -58,68 +61,6 @@ class StudioModel(pydantic.BaseModel):
   def to_json(self) -> dict[str, Any]:
     """Returns a camelCase, JSON-compatible dict of this model."""
     return self.model_dump(by_alias=True, mode='json')
-
-
-class CatalogEntry(StudioModel):
-  """One selectable option that the UI lists with a label."""
-
-  kind: str
-  label: str
-  description: str
-
-
-AUDIO_TRANSITIONS: tuple[CatalogEntry, ...] = (
-    CatalogEntry(
-        kind='hard_cut',
-        label='하드 컷',
-        description='영상과 음성이 같은 지점에서 바뀝니다.',
-    ),
-    CatalogEntry(
-        kind='j_cut',
-        label='J컷',
-        description='다음 Clip의 음성이 먼저 들리고 화면은 조금 늦게 바뀝니다.',
-    ),
-    CatalogEntry(
-        kind='l_cut',
-        label='L컷',
-        description='화면이 먼저 바뀌고 이전 Clip의 음성이 조금 더 이어집니다.',
-    ),
-)
-
-CAPTION_SOURCES: tuple[CatalogEntry, ...] = (
-    CatalogEntry(
-        kind='manual_aligned',
-        label='업로드 자막 + ASR 타이밍',
-        description='업로드된 자막 문장을 자동 자막의 단어 타이밍에 맞췄습니다.',
-    ),
-    CatalogEntry(
-        kind='asr',
-        label='자동 생성 자막',
-        description='YouTube 음성 인식 단어와 타이밍을 그대로 씁니다.',
-    ),
-    CatalogEntry(
-        kind='manual',
-        label='업로드 자막 (타이밍 추정)',
-        description='문장 안의 단어 타이밍은 글자 수로 나눈 추정값입니다.',
-    ),
-    CatalogEntry(
-        kind='gemini',
-        label='Gemini 받아쓰기',
-        description='자막이 없어 Gemini가 선택한 Clip을 받아썼습니다.',
-    ),
-)
-
-
-def catalog_kinds(catalog: tuple[CatalogEntry, ...]) -> list[str]:
-  """Returns the kind identifiers of a catalog in display order."""
-  return [entry.kind for entry in catalog]
-
-
-def _require_kind(value: str, catalog: tuple[CatalogEntry, ...]) -> str:
-  kinds = catalog_kinds(catalog)
-  if value not in kinds:
-    raise ValueError(f'{value!r} is not one of {kinds}')
-  return value
 
 
 def _hex_color(value: str) -> str:
@@ -167,39 +108,42 @@ class CropRegion(StudioModel):
   zoom: float = pydantic.Field(ge=1.0, le=MAX_CROP_ZOOM)
 
 
+class VideoBoxSpec(StudioModel):
+  """Custom video box geometry in canvas units (top-left x, y and size)."""
+
+  x: float = pydantic.Field(ge=0.0)
+  y: float = pydantic.Field(ge=0.0)
+  width: float = pydantic.Field(ge=64.0)
+  height: float = pydantic.Field(ge=64.0)
+
+
 class FramingLayout(StudioModel):
   """How the source frame is placed on the canvas.
 
-  In a 'box' fit the video sits in the template's box (rounded or square);
-  in a 'full' fit it covers the whole 9:16 canvas. The crop has the aspect
-  ratio of the area it fills, so zoom 1 is the largest crop of that ratio.
+  In a 'box' fit the video sits in the template's box (or custom `box` when
+  set) with square corners; in a 'full' fit it covers the whole 9:16 canvas.
+  The crop has the aspect ratio of the area it fills, so zoom 1 is the
+  largest crop of that ratio.
   """
 
   crop: CropRegion
   fit: VideoFit = 'box'
-  # Rounds the box corners; ignored in a 'full' fit.
-  rounded: bool = True
+  box: VideoBoxSpec | None = None
 
 
 class Headline(StudioModel):
-  """The two-line title shown above the video box for the whole short."""
+  """The title shown above the video box for the whole short.
 
-  # First line, drawn in the accent color.
-  accent: str = ''
-  # Second line, drawn in the main headline color.
-  main: str = ''
+  Any number of lines, stacked top to bottom. The first line is drawn in
+  the accent color, the others in the main headline color (both from the
+  Look Style). Empty lines are skipped when drawing.
+  """
 
+  lines: list[str] = []
 
-class AudioTransition(StudioModel):
-  """The transition applied to every Clip boundary of a Scenario."""
-
-  kind: str
-  duration_sec: float = pydantic.Field(ge=0.0, le=MAX_TRANSITION_SEC)
-
-  @pydantic.field_validator('kind')
-  @classmethod
-  def _known_kind(cls, value: str) -> str:
-    return _require_kind(value, AUDIO_TRANSITIONS)
+  def shown_lines(self) -> list[str]:
+    """Returns the non-empty lines, stripped, in order."""
+    return [line.strip() for line in self.lines if line.strip()]
 
 
 class TextPlacement(StudioModel):
@@ -239,7 +183,10 @@ class TextStyle(StudioModel):
 
 
 class HeadlineStyle(TextStyle):
-  """The Headline's text style; color is the second line's color."""
+  """The Headline's text style.
+
+  color paints every line after the first, which takes accent_color.
+  """
 
   accent_color: HexColor
 
@@ -284,19 +231,12 @@ class BackgroundMusic(StudioModel):
 
 
 class SourceVideo(StudioModel):
-  """Metadata of the long-form Source Video."""
+  """Metadata of the uploaded long-form Source Video."""
 
-  video_id: str
-  url: str
+  # The uploaded file name without its extension.
   title: str
-  channel: str
   duration_sec: float
-  language: str
   fps: float
-  width: int
-  height: int
-  thumbnail_url: str
-  caption_source: CaptionSource
 
 
 class TranscriptWord(StudioModel):
@@ -324,7 +264,7 @@ class Look(StudioModel):
 
 
 class Clip(StudioModel):
-  """A contiguous range of the Source Video used inside a Scenario."""
+  """A contiguous range of the Source Video or an inserted media asset."""
 
   clip_id: str
   start_sec: float = pydantic.Field(ge=0.0)
@@ -333,10 +273,17 @@ class Clip(StudioModel):
   purpose: str = ''
   # This Clip's own Look; None follows the Scenario's Look.
   look: Look | None = None
+  media_kind: ClipMediaKind = 'source'
+  asset_id: str | None = None
+  mute_audio: bool = False
 
 
 class Scenario(StudioModel):
-  """An ordered sequence of Clips that forms one short."""
+  """An ordered sequence of Clips that forms one short.
+
+  Clips follow each other with hard cuts: picture and sound change at the
+  same instant.
+  """
 
   scenario_id: str
   # Internal name used for tabs and file names; not drawn on the video.
@@ -344,23 +291,78 @@ class Scenario(StudioModel):
   rationale: str
   # The Look shared by every Clip without its own.
   look: Look
-  audio_transition: AudioTransition
   music: BackgroundMusic | None = None
   clips: list[Clip]
 
 
 class AnalysisReport(StudioModel):
-  """How the Gemini analysis ran, reported as measured."""
+  """What one analysis cost and how long it took, reported as measured."""
 
-  gemini_backend: GeminiBackend
-  gemini_model: str
-  media_processing: str
-  structured_output: bool
-  agentic_steps: int
-  tool_use_tokens: int
-  thoughts_tokens: int
+  # List price in USD of every Gemini call that returned usage, including
+  # calls retried for an unusable answer. None when a call's model has no
+  # known price or its usage is missing (see pricing.py).
+  cost_usd: float | None
+  # From the start of the analysis to its result, ingestion included.
   elapsed_sec: float
   warnings: list[str] = []
+
+
+class YouTubeRetentionPoint(StudioModel):
+  """One bucket of the YouTube Analytics Audience Retention curve.
+
+  elapsed_ratio runs from 0.0 to 1.0 across the video length; watch_ratio is
+  audienceWatchRatio and relative_performance is relativeRetentionPerformance
+  (0..1, where > 0.5 beats videos of similar length).
+  """
+
+  elapsed_ratio: float = pydantic.Field(ge=0.0, le=1.0)
+  watch_ratio: float = pydantic.Field(ge=0.0)
+  relative_performance: float = pydantic.Field(ge=0.0, le=1.0)
+
+
+class YouTubeRetentionPeak(StudioModel):
+  """A high-retention peak or low-retention drop-off span in seconds."""
+
+  start_sec: float = pydantic.Field(ge=0.0)
+  end_sec: float = pydantic.Field(ge=0.0)
+  watch_ratio: float = pydantic.Field(ge=0.0)
+  relative_performance: float = pydantic.Field(ge=0.0, le=1.0)
+  label: str = ''
+
+
+class YouTubeComment(StudioModel):
+  """A top-level viewer comment on a YouTube video."""
+
+  comment_id: str
+  author: str = ''
+  text: str
+  like_count: int = 0
+  published_at: str = ''
+  timestamp_sec: float | None = None
+
+
+class YouTubeVideoContext(StudioModel):
+  """Creator-owned YouTube data linked to a Source Video.
+
+  Fetched through the creator's OAuth token from YouTube Data API v3 and
+  YouTube Analytics API v2 and stored in the Workspace (youtube.json).
+  """
+
+  video_id: str
+  title: str = ''
+  published_at: str = ''
+  duration_sec: float = 0.0
+  view_count: int = 0
+  like_count: int = 0
+  comment_count: int = 0
+  privacy_status: str = 'public'
+  retention_points: list[YouTubeRetentionPoint] = []
+  retention_peaks: list[YouTubeRetentionPeak] = []
+  retention_lows: list[YouTubeRetentionPeak] = []
+  comments: list[YouTubeComment] = []
+  caption_words: list[TranscriptWord] = []
+  caption_line_starts: list[int] = []
+  caption_language: str = ''
 
 
 class AnalysisResult(StudioModel):
@@ -369,29 +371,60 @@ class AnalysisResult(StudioModel):
   source_video: SourceVideo
   transcript_words: list[TranscriptWord]
   line_start_indices: list[int]
-  video_summary: str
-  speakers: list[str]
   scenarios: list[Scenario]
-  cut_word_indices: list[int]
   analysis: AnalysisReport
+  silences: list[TimeRange] = []
+  youtube_video_id: str = ''
+  retention_points: list[YouTubeRetentionPoint] = []
+  retention_peaks: list[YouTubeRetentionPeak] = []
+  retention_lows: list[YouTubeRetentionPeak] = []
+  youtube_comments: list[YouTubeComment] = []
 
 
 class AnalyzeRequest(StudioModel):
-  """Request body of the analyze endpoint.
+  """Request body of the analyze endpoint."""
 
-  Exactly one of youtube_url and source_id names the Source Video: a
-  YouTube URL, or a file already sent to the upload-source endpoint.
+  # A file already sent to the upload-source endpoint.
+  source_id: str = pydantic.Field(min_length=1)
+  editorial_prompt: str = pydantic.Field(min_length=1)
+  # Ignored by the first analysis of a Source Video, which always watches
+  # the video and transcribes it in full; decides how later analyses run.
+  mode: ReanalyzeMode = 'fast'
+  # Optional YouTube video id from the signed-in creator's channel; when
+  # given, its Audience Retention curve and official captions are fetched and
+  # passed to Gemini.
+  youtube_video_id: str = ''
+
+
+class StoredTranscript(StudioModel):
+  """The full transcript of a Source Video, extracted once.
+
+  Kept in the Workspace (transcript.json) so a re-analysis can work from
+  text alone instead of sending the video again.
   """
 
-  youtube_url: str = ''
-  source_id: str = ''
-  editorial_prompt: str = pydantic.Field(min_length=1)
+  words: list[TranscriptWord]
+  line_start_indices: list[int]
+  # The Gemini model that transcribed it.
+  model: str = ''
 
-  @pydantic.model_validator(mode='after')
-  def _one_source(self) -> AnalyzeRequest:
-    if bool(self.youtube_url.strip()) == bool(self.source_id.strip()):
-      raise ValueError('youtubeUrl과 sourceId 중 하나만 보내야 합니다.')
-    return self
+
+class CachedVideoMeta(StudioModel):
+  """A Gemini Context Cache that holds a Source Video's analysis proxy.
+
+  Caches are per model and per backend; the entry is useless on another
+  one. expire_time_epoch is Unix seconds.
+  """
+
+  name: str
+  model: str
+  backend: GeminiBackend
+  expire_time_epoch: float
+  token_count: int = 0
+
+  def is_alive(self, now: float, margin_sec: float = 60.0) -> bool:
+    """Whether the cache still exists at `now` plus a safety margin."""
+    return self.expire_time_epoch - margin_sec > now
 
 
 class RenderClip(StudioModel):
@@ -401,6 +434,9 @@ class RenderClip(StudioModel):
   # The Look shown while this Clip's video plays (its own or the
   # Scenario's, already resolved by the client).
   look: Look
+  media_kind: ClipMediaKind = 'source'
+  asset_id: str | None = None
+  mute_audio: bool = False
 
 
 class CueWord(StudioModel):
@@ -419,11 +455,10 @@ class CaptionCue(StudioModel):
 
 
 class RenderPlan(StudioModel):
-  """An edited Scenario, resolved for rendering or export."""
+  """An edited Scenario, resolved for rendering (hard cuts between Clips)."""
 
   clips: list[RenderClip] = pydantic.Field(min_length=1)
   cues: list[CaptionCue] = []
-  audio_transition: AudioTransition
   music: BackgroundMusic | None = None
 
 
@@ -447,58 +482,68 @@ class UploadedSource(StudioModel):
   silences: list[TimeRange]
 
 
+class UploadInitRequest(StudioModel):
+  """Request body of the upload-source/init endpoint."""
+
+  filename: str = pydantic.Field(min_length=1)
+  size_bytes: int = pydantic.Field(gt=0)
+  content_type: str = 'video/mp4'
+
+
+class UploadInitResponse(StudioModel):
+  """Response body of the upload-source/init endpoint."""
+
+  mode: Literal['gcs', 'direct']
+  source_id: str = ''
+  upload_url: str = ''
+
+
+class UploadCompleteRequest(StudioModel):
+  """Request body of the upload-source/complete endpoint."""
+
+  source_id: str = pydantic.Field(min_length=1)
+  filename: str = pydantic.Field(min_length=1)
+  size_bytes: int = pydantic.Field(gt=0)
+  duration_sec: float = 0.0
+  width: int = 0
+  height: int = 0
+  fps: float = 30.0
+  has_audio: bool = True
+
+
 class UploadedAsset(StudioModel):
-  """An image or audio file the user added for overlays or music."""
+  """An image, audio or video file added for clips, overlays or music."""
 
   asset_id: str
   kind: AssetKind
   filename: str
   size_bytes: int
-  # Pixel size of an image; 0 for audio.
+  # Pixel size of an image or video; 0 for audio.
   width: int = 0
   height: int = 0
-  # Length of an audio file; 0 for images.
+  # Length of an audio or video file; 0 for images.
   duration_sec: float = 0.0
+  has_audio: bool = False
 
 
 class RenderRequest(StudioModel):
   """Request body of the render endpoint."""
 
   source_id: str = pydantic.Field(min_length=1)
-  quality: RenderQuality = 'preview'
   plan: RenderPlan
+  quality: RenderQuality = '1440p'
 
 
-class ExportRequest(StudioModel):
-  """Request body of the export endpoint (no upload needed)."""
-
-  media: MediaInfo
-  source_filename: str = pydantic.Field(default='source.mp4', min_length=1)
-  quality: RenderQuality = 'final'
-  plan: RenderPlan
-
-
-class ExportOutput(StudioModel):
-  """An ffmpeg command plus captions for running the edit elsewhere."""
-
-  planned_duration_sec: float
-  ffmpeg_command: str
-  srt: str
-  ass: str
-  # The command reads the ASS captions from this file name.
-  ass_filename: str
-  # Image and music files the command reads, besides the Source Video.
-  asset_filenames: list[str] = []
-
-
-class RenderOutput(ExportOutput):
+class RenderOutput(StudioModel):
   """A rendered short and its measured stream durations."""
 
   render_id: str
   video_url: str
+  planned_duration_sec: float
   measured_video_sec: float
   measured_audio_sec: float
-  elapsed_sec: float
+  width: int = 1440
+  height: int = 2560
 
 
 class CompositionSettings(StudioModel):
@@ -512,7 +557,6 @@ class CompositionSettings(StudioModel):
   new_clip_sec: float
   edit_window_pad_sec: float
   nudge_steps_sec: list[float]
-  duration_tolerance_sec: float
   # Linear gain a newly added Background Music starts with.
   default_music_volume: float
   # The music fades out over this long at the end of the short.
@@ -524,12 +568,13 @@ class CompositionSettings(StudioModel):
 class TemplateStyle(StudioModel):
   """Geometry of the single short template, in canvas units.
 
-  A solid background holds a video box (rounded or square) centered
-  vertically, a two-line Headline above the box and a one-line caption
-  inside the box near its bottom edge. A Clip may instead fill the whole
-  canvas with its video, and then the text sits over the video. Colors
-  and fonts live in each Look's LookStyle. The ASS file uses the canvas
-  size as PlayRes, so renders at other sizes scale every value.
+  A solid background holds a square-cornered video box centered
+  vertically, a Headline of one or more lines above the box and a one-line
+  caption below the box, on the background rather than over the picture.
+  A Clip may instead fill the whole canvas with its video, or customize
+  its video box size and position. Colors and fonts live in each Look's
+  LookStyle. The ASS file uses the canvas size as PlayRes, so renders at
+  other sizes scale every value.
   """
 
   canvas_width: int
@@ -538,15 +583,15 @@ class TemplateStyle(StudioModel):
   # Width / height of the video box; the crop uses the same ratio.
   box_aspect_ratio: float
   box_center_y: int
-  box_corner_radius: int
-  # Extra space between the accent line and the main line.
+  # Extra space between consecutive Headline lines.
   headline_line_gap: int
   # Default distance from the bottom of the Headline to the box top.
   headline_gap: int
   # Space between text and the edge of its background box.
   text_box_padding: int
-  # Default distance from the bottom of the caption line to the box bottom.
-  caption_bottom_inset: int
+  # Default distance from the box bottom to the bottom of the caption line
+  # (the caption's anchor), so the caption sits under the video.
+  caption_gap: int
   # Horizontal room kept between the caption and the box edges; captions
   # wrap within the box width minus this padding on both sides.
   caption_side_padding: int
@@ -557,7 +602,7 @@ class TemplateStyle(StudioModel):
 
 
 class RenderProfile(StudioModel):
-  """Output size and encoder settings of one render quality."""
+  """Output size and encoder settings of the render."""
 
   width: int
   height: int
@@ -571,19 +616,82 @@ class FontEntry(StudioModel):
 
   font_id: str
   label: str
-  family: str
   url: str
-  bold: bool
   # CSS font-size per ASS font size (see fonts.em_per_line_box).
   em_per_line_box: float
+
+
+class CreatorProfile(StudioModel):
+  """Signed-in Google / YouTube creator account and channel metadata."""
+
+  email: str = ''
+  name: str = ''
+  picture_url: str = ''
+  channel_title: str = ''
+  channel_handle: str = ''
+
+
+class OAuthSession(StudioModel):
+  """Server-side OAuth 2.0 session stored in the Workspace."""
+
+  session_id: str
+  access_token: str
+  refresh_token: str = ''
+  expires_at_epoch: float
+  user: CreatorProfile
+
+
+class AuthStatus(StudioModel):
+  """Authentication state returned to the browser."""
+
+  authenticated: bool
+  oauth_configured: bool
+  oauth_setup_error: str = ''
+  user: CreatorProfile | None = None
+
+
+class YouTubeVideoItem(StudioModel):
+  """A long-form video from the signed-in creator's YouTube channel."""
+
+  video_id: str
+  title: str
+  description: str = ''
+  thumbnail_url: str = ''
+  published_at: str = ''
+  duration_sec: float = 0.0
+  view_count: int = 0
+  like_count: int = 0
+  comment_count: int = 0
+  privacy_status: str = 'public'
+  has_captions: bool = False
+
+
+class YouTubeVideoList(StudioModel):
+  """Videos listed from the signed-in creator's YouTube channel."""
+
+  videos: list[YouTubeVideoItem] = []
+
+
+class YouTubeUploadRequest(StudioModel):
+  """Request body of the YouTube Shorts upload endpoint."""
+
+  render_id: str = pydantic.Field(min_length=1)
+  title: str = pydantic.Field(min_length=1, max_length=100)
+  description: str = ''
+  privacy_status: YouTubePrivacy = 'private'
+
+
+class YouTubeUploadResult(StudioModel):
+  """Result of uploading a rendered Shorts MP4 to YouTube."""
+
+  watch_url: str
+  studio_url: str
 
 
 class StudioConfig(StudioModel):
   """Static configuration the UI loads at startup."""
 
   default_editorial_prompt: str
-  audio_transitions: list[CatalogEntry]
-  caption_sources: list[CatalogEntry]
   composition: CompositionSettings
   template_style: TemplateStyle
   # Where the text goes by default for each VideoFit.
@@ -591,16 +699,10 @@ class StudioConfig(StudioModel):
   # Colors and fonts of a new Look.
   default_look_style: LookStyle
   fonts: list[FontEntry]
-  render_profiles: dict[str, RenderProfile]
   max_crop_zoom: float
-  max_transition_sec: float
   max_music_volume: float
   # Non-empty when bundled font files are missing.
   font_warning: str
-  gemini_backend: GeminiBackend
-  # Vertex AI target; shown only when gemini_backend is 'vertex'.
-  vertex_project: str
-  vertex_location: str
   # Non-empty when the server cannot call Gemini; says what to configure.
   gemini_setup_error: str
-  model_chain: list[str]
+  auth: AuthStatus

@@ -5,13 +5,15 @@
  * and the Image Overlays (as ffmpeg composites them).
  * Text blocks and images can be dragged here; images also get resize and
  * rotate handles when selected. Drags stay local until the pointer is
- * released, then commit the edited Look once.
+ * released, then commit the edited Look once. A press that does not move
+ * is a click, which reports what was hit so the editor can focus it.
  */
 
 import {Fragment, useRef, useState, type CSSProperties, type PointerEvent} from 'react';
 
+import {type StageHit} from '../../lib/focus';
 import {cssFontSize, fontStack, rgba} from '../../lib/fonts';
-import {videoBox} from '../../lib/framing';
+import {clampVideoBox, videoBox} from '../../lib/framing';
 import type {
   FontEntry,
   ImageOverlay,
@@ -20,6 +22,7 @@ import type {
   TextLayout,
   TextPlacement,
   TextStyle,
+  VideoBoxSpec,
 } from '../../types';
 
 interface Point {
@@ -32,17 +35,45 @@ interface TextLine {
   color: string;
 }
 
-type Draft = {textLayout: TextLayout} | {image: ImageOverlay};
+type BoxHandle = 'move' | 'nw' | 'ne' | 'sw' | 'se';
+type Draft = {textLayout: TextLayout} | {image: ImageOverlay} | {box: VideoBoxSpec};
 
 // A dragged text block snaps to the canvas center line within this many
 // canvas units.
 const SNAP_UNITS = 12;
 // Images never shrink below this width in canvas units.
 const MIN_IMAGE_UNITS = 24;
+// A press that moves less than this many canvas units is a click.
+const CLICK_UNITS = 3;
+
+// Handles on the video box: its edges move it, its corners resize it.
+const BOX_EDGES = [
+  {
+    at: '-top-2 inset-x-3 h-4',
+    label: '영상 화면 위치 이동',
+    title: '드래그해서 영상 위치 이동, 클릭해서 영상 배치 설정 열기',
+  },
+  {at: '-bottom-2 inset-x-3 h-4', label: '영상 화면 아래쪽 테두리 이동', title: '드래그해서 영상 위치 이동'},
+  {at: 'inset-y-3 -left-2 w-4', label: '영상 화면 왼쪽 테두리 이동', title: '드래그해서 영상 위치 이동'},
+  {at: 'inset-y-3 -right-2 w-4', label: '영상 화면 오른쪽 테두리 이동', title: '드래그해서 영상 위치 이동'},
+];
+const BOX_CORNERS = [
+  {handle: 'nw', at: '-top-1.5 -left-1.5', cursor: 'cursor-nwse-resize', label: '왼쪽 위'},
+  {handle: 'ne', at: '-top-1.5 -right-1.5', cursor: 'cursor-nesw-resize', label: '오른쪽 위'},
+  {handle: 'sw', at: '-bottom-1.5 -left-1.5', cursor: 'cursor-nesw-resize', label: '왼쪽 아래'},
+  {handle: 'se', at: '-right-1.5 -bottom-1.5', cursor: 'cursor-nwse-resize', label: '오른쪽 아래'},
+] as const;
 
 function normalizeDegrees(value: number): number {
   const turned = ((((value + 180) % 360) + 360) % 360) - 180;
   return Math.round(turned * 10) / 10;
+}
+
+/** Index of the text line under `target`, or 0 outside every line. */
+function lineAt(target: EventTarget | null): number {
+  const line =
+    target instanceof Element ? target.closest<HTMLElement>('[data-line]') : null;
+  return Number(line?.dataset.line ?? 0);
 }
 
 export function OverlayLayer(props: {
@@ -53,16 +84,22 @@ export function OverlayLayer(props: {
   /** Active caption text; empty between cues. */
   caption: string;
   assetUrls: ReadonlyMap<string, string>;
-  /** Shows a placeholder where the caption goes while no cue is active. */
+  /** Shows where the Headline and caption go while they are empty. */
   showPlaceholders: boolean;
   selectedImageId: string | null;
   onSelectImage: (overlayId: string | null) => void;
   onLook: (look: Look) => void;
+  /** A click (not a drag) landed on this element. */
+  onHit: (hit: StageHit) => void;
 }) {
   const {style, look} = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const textLayout = draft && 'textLayout' in draft ? draft.textLayout : look.textLayout;
+  const effectiveFraming =
+    draft && 'box' in draft
+      ? {...look.framingLayout, box: draft.box}
+      : look.framingLayout;
   const images = look.images.map((image) =>
     draft && 'image' in draft && draft.image.overlayId === image.overlayId ? draft.image : image,
   );
@@ -78,10 +115,13 @@ export function OverlayLayer(props: {
     return {x: (clientX - rect.left) * scale, y: (clientY - rect.top) * scale};
   };
 
+  // Tracks a press: a move past CLICK_UNITS drags (drafts on every move,
+  // commits on release); a release before that is a click.
   const drag = (
     event: PointerEvent<HTMLElement>,
     move: (from: Point, to: Point) => Draft,
     commit: (value: Draft) => void,
+    click: () => void,
   ) => {
     if (event.button !== 0) {
       return;
@@ -93,26 +133,39 @@ export function OverlayLayer(props: {
     const from = toCanvas(event.clientX, event.clientY);
     let last: Draft | null = null;
     const onMove = (moveEvent: globalThis.PointerEvent) => {
-      last = move(from, toCanvas(moveEvent.clientX, moveEvent.clientY));
+      const to = toCanvas(moveEvent.clientX, moveEvent.clientY);
+      if (last === null && Math.hypot(to.x - from.x, to.y - from.y) < CLICK_UNITS) {
+        return;
+      }
+      last = move(from, to);
       setDraft(last);
     };
-    const onUp = () => {
+    const finish = (released: boolean) => {
       target.removeEventListener('pointermove', onMove);
       target.removeEventListener('pointerup', onUp);
-      target.removeEventListener('pointercancel', onUp);
+      target.removeEventListener('pointercancel', onCancel);
       setDraft(null);
       if (last) {
         commit(last);
+      } else if (released) {
+        click();
       }
     };
+    const onUp = () => finish(true);
+    const onCancel = () => finish(false);
     target.addEventListener('pointermove', onMove);
     target.addEventListener('pointerup', onUp);
-    target.addEventListener('pointercancel', onUp);
+    target.addEventListener('pointercancel', onCancel);
   };
 
   const commitDraft = (value: Draft) => {
     if ('textLayout' in value) {
       props.onLook({...look, textLayout: value.textLayout});
+    } else if ('box' in value) {
+      props.onLook({
+        ...look,
+        framingLayout: {...look.framingLayout, fit: 'box', box: value.box},
+      });
     } else {
       props.onLook({
         ...look,
@@ -123,7 +176,70 @@ export function OverlayLayer(props: {
     }
   };
 
-  const dragText = (event: PointerEvent<HTMLElement>, key: keyof TextLayout) => {
+  const dragVideoBox = (
+    event: PointerEvent<HTMLElement>,
+    handle: BoxHandle,
+  ) => {
+    const startBox = look.framingLayout.box
+      ? clampVideoBox(style, look.framingLayout.box)
+      : videoBox(style, style.canvasWidth);
+    const right = startBox.x + startBox.width;
+    const bottom = startBox.y + startBox.height;
+    drag(
+      event,
+      (from, to) => {
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        if (handle === 'move') {
+          let nextX = startBox.x + dx;
+          const centerX = (style.canvasWidth - startBox.width) / 2;
+          if (Math.abs(nextX - centerX) < SNAP_UNITS) {
+            nextX = centerX;
+          }
+          return {
+            box: clampVideoBox(style, {
+              x: nextX,
+              y: startBox.y + dy,
+              width: startBox.width,
+              height: startBox.height,
+            }),
+          };
+        }
+        const nextLeft =
+          handle === 'nw' || handle === 'sw'
+            ? Math.max(0, Math.min(right - 120, startBox.x + dx))
+            : startBox.x;
+        const nextRight =
+          handle === 'ne' || handle === 'se'
+            ? Math.min(style.canvasWidth, Math.max(startBox.x + 120, right + dx))
+            : right;
+        const nextTop =
+          handle === 'nw' || handle === 'ne'
+            ? Math.max(0, Math.min(bottom - 120, startBox.y + dy))
+            : startBox.y;
+        const nextBottom =
+          handle === 'sw' || handle === 'se'
+            ? Math.min(style.canvasHeight, Math.max(startBox.y + 120, bottom + dy))
+            : bottom;
+        return {
+          box: clampVideoBox(style, {
+            x: nextLeft,
+            y: nextTop,
+            width: nextRight - nextLeft,
+            height: nextBottom - nextTop,
+          }),
+        };
+      },
+      commitDraft,
+      () => props.onHit({kind: 'videoBox'}),
+    );
+  };
+
+  const dragText = (
+    event: PointerEvent<HTMLElement>,
+    key: keyof TextLayout,
+    click: () => void,
+  ) => {
     const start = look.textLayout[key];
     const center = style.canvasWidth / 2;
     drag(
@@ -140,6 +256,7 @@ export function OverlayLayer(props: {
         return {textLayout: {...look.textLayout, [key]: placement}};
       },
       commitDraft,
+      click,
     );
   };
 
@@ -182,12 +299,14 @@ export function OverlayLayer(props: {
         };
       },
       commitDraft,
+      () => props.onHit({kind: 'image', overlayId: start.overlayId}),
     );
   };
 
   // Mirrors the ASS events: bottom center anchored at the placement,
   // wrapped within `width`, one line box per ASS size. A background is its
   // own layer below the text, like the Box event under the Text event.
+  // A click reports the index (into `lines`) of the line it landed on.
   const textBlock = (
     key: keyof TextLayout,
     width: number,
@@ -195,6 +314,7 @@ export function OverlayLayer(props: {
     label: string,
     lines: readonly TextLine[],
     dim: boolean,
+    onClick: (line: number) => void,
   ) => {
     const placement = textLayout[key];
     const pad = unit(style.textBoxPadding);
@@ -223,7 +343,7 @@ export function OverlayLayer(props: {
       lines.map((line, index) => (
         <Fragment key={index}>
           {index > 0 && <div style={{height: unit(style.headlineLineGap)}} />}
-          <div>
+          <div data-line={index}>
             <span style={{...piece, ...paint(line)}}>{line.text}</span>
           </div>
         </Fragment>
@@ -242,8 +362,11 @@ export function OverlayLayer(props: {
         <div
           role="button"
           aria-label={`${label} 위치 이동`}
-          title={`${label}: 드래그해서 옮기기`}
-          onPointerDown={(event) => dragText(event, key)}
+          title={`${label}: 드래그해서 옮기기, 눌러서 수정`}
+          onPointerDown={(event) => {
+            const line = lineAt(event.target);
+            dragText(event, key, () => onClick(line));
+          }}
           className="pointer-events-auto absolute cursor-move touch-none select-none rounded-sm outline-1 outline-dashed outline-transparent hover:outline-white/60"
           style={frame}
         >
@@ -260,17 +383,24 @@ export function OverlayLayer(props: {
     );
   };
 
-  const accent = look.headline.accent.trim();
-  const main = look.headline.main.trim();
-  const box = videoBox(style, style.canvasWidth, look.framingLayout.fit);
+  const box = videoBox(style, style.canvasWidth, effectiveFraming);
   const headlineWidth = style.canvasWidth - 2 * style.boxSideMargin;
   const captionWidth = style.canvasWidth - 2 * (box.x + style.captionSidePadding);
   const caption = props.caption || (props.showPlaceholders ? '자막 위치' : '');
   const {headline: headlineStyle, caption: captionStyle} = look.style;
-  const headlineLines: TextLine[] = [
-    {text: accent, color: headlineStyle.accentColor},
-    {text: main, color: headlineStyle.color},
-  ].filter((line) => line.text);
+  // The drawn Headline lines with their index in Headline.lines; the first
+  // drawn line takes the accent color.
+  const shownLines = look.headline.lines
+    .map((text, index) => ({text: text.trim(), index}))
+    .filter((line) => line.text);
+  const headlineLines: TextLine[] = shownLines.map((line, shown) => ({
+    text: line.text,
+    color: shown === 0 ? headlineStyle.accentColor : headlineStyle.color,
+  }));
+  const headlineEmpty = headlineLines.length === 0;
+  if (headlineEmpty && props.showPlaceholders) {
+    headlineLines.push({text: '헤드라인 위치', color: headlineStyle.accentColor});
+  }
 
   return (
     <div
@@ -278,8 +408,56 @@ export function OverlayLayer(props: {
       className="pointer-events-none absolute inset-0 overflow-hidden text-center font-normal"
       style={{containerType: 'inline-size'}}
     >
+      {effectiveFraming.fit === 'box' && props.showPlaceholders && (
+        <div
+          className="group/vbox pointer-events-none absolute"
+          style={{
+            left: unit(box.x),
+            top: unit(box.y),
+            width: unit(box.width),
+            height: unit(box.height),
+          }}
+        >
+          <div
+            className={`pointer-events-none absolute inset-0 border border-dashed transition-colors ${
+              draft && 'box' in draft
+                ? 'border-primary bg-primary/10'
+                : 'border-white/25 group-hover/vbox:border-primary/80'
+            }`}
+          />
+          {BOX_EDGES.map((edge) => (
+            <div
+              key={edge.at}
+              role="button"
+              aria-label={edge.label}
+              title={edge.title}
+              onPointerDown={(event) => dragVideoBox(event, 'move')}
+              className={`pointer-events-auto absolute ${edge.at} cursor-move touch-none`}
+            />
+          ))}
+          {BOX_CORNERS.map((corner) => (
+            <span
+              key={corner.handle}
+              role="button"
+              aria-label={`영상 화면 ${corner.label} 크기 조절`}
+              title="드래그해서 영상 크기 조절"
+              onPointerDown={(event) => dragVideoBox(event, corner.handle)}
+              className={`pointer-events-auto absolute ${corner.at} h-3 w-3 ${corner.cursor} touch-none border border-white bg-primary opacity-75 hover:opacity-100`}
+            />
+          ))}
+        </div>
+      )}
       {headlineLines.length > 0 &&
-        textBlock('headline', headlineWidth, headlineStyle, '헤드라인', headlineLines, false)}
+        textBlock(
+          'headline',
+          headlineWidth,
+          headlineStyle,
+          '헤드라인',
+          headlineLines,
+          headlineEmpty,
+          (line) =>
+            props.onHit({kind: 'headline', line: shownLines[line]?.index ?? 0}),
+        )}
       {caption &&
         textBlock(
           'caption',
@@ -288,6 +466,7 @@ export function OverlayLayer(props: {
           '자막',
           [{text: caption, color: captionStyle.color}],
           !props.caption,
+          () => props.onHit({kind: 'caption'}),
         )}
       {images.map((image) => {
         const url = props.assetUrls.get(image.assetId);
@@ -297,9 +476,10 @@ export function OverlayLayer(props: {
             key={image.overlayId}
             role="button"
             aria-label="이미지 이동"
+            title="드래그해서 옮기기, 눌러서 수정"
             onPointerDown={(event) => dragImage(event, image, 'move')}
             className={`pointer-events-auto absolute cursor-move touch-none select-none ${
-              selected ? 'outline-2 outline-dashed outline-sky-400' : 'hover:outline-1 hover:outline-dashed hover:outline-white/60'
+              selected ? 'outline-2 outline-dashed outline-primary' : 'hover:outline-1 hover:outline-dashed hover:outline-white/60'
             }`}
             style={{
               left: unit(image.x - image.width / 2),
@@ -312,7 +492,7 @@ export function OverlayLayer(props: {
             {url ? (
               <img src={url} alt="" draggable={false} className="h-full w-full" />
             ) : (
-              <div className="grid h-full w-full place-items-center bg-zinc-800/80 text-[10px] font-normal text-zinc-300">
+              <div className="grid h-full w-full place-items-center bg-surface-container-highest/80 text-[10px] font-normal text-on-surface-variant">
                 이미지 없음
               </div>
             )}
@@ -323,14 +503,14 @@ export function OverlayLayer(props: {
                   aria-label="이미지 크기 조절"
                   title="드래그해서 크기 조절"
                   onPointerDown={(event) => dragImage(event, image, 'resize')}
-                  className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-sky-500"
+                  className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-primary"
                 />
                 <span
                   role="button"
                   aria-label="이미지 회전"
                   title="드래그해서 회전"
                   onPointerDown={(event) => dragImage(event, image, 'rotate')}
-                  className="absolute -top-5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-grab rounded-full border border-white bg-sky-500"
+                  className="absolute -top-5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-grab rounded-full border border-white bg-primary"
                 />
               </>
             )}

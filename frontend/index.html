@@ -3,12 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>에이전틱 숏폼 점프컷 스튜디오</title>
-    <meta name="description" content="에이전틱 비디오 이해(Agentic Video Understanding) 기반 9:16 숏폼 점프컷 · J-Cut · 키네틱 자막 다중 시나리오 스튜디오" />
-    <meta property="og:title" content="에이전틱 숏폼 점프컷 스튜디오" />
-    <meta property="og:description" content="에이전틱 비디오 이해 기반 9:16 숏폼 점프컷 · J-Cut · 키네틱 자막 다중 시나리오 스튜디오" />
+    <title>Agentic Shorts 생성 스튜디오</title>
+    <meta name="description" content="긴 영상을 올리면 Gemini가 영상을 직접 보고 원본 목소리로 Shorts를 만들어 줍니다." />
+    <meta property="og:title" content="Agentic Shorts 생성 스튜디오" />
+    <meta property="og:description" content="긴 영상을 올리면 Gemini가 영상을 직접 보고 원본 목소리로 Shorts를 만들어 줍니다." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Applies the saved theme before the first paint (see useTheme.ts).
+      (function () {
+        var choice = 'system';
+        try {
+          choice = localStorage.getItem('theme') || 'system';
+        } catch (error) {}
+        var dark =
+          choice === 'dark' ||
+          (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&family=Noto+Sans+KR:wght@400..700&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

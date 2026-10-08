@@ -1,64 +1,405 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 /*
- * Scenario workspace layout. Narrow screens stack everything. From lg the
- * preview gets its own column and stays pinned below the header while the
- * other columns scroll; from xl the Look controls get a middle column.
- * --preview-w sizes the 9:16 frame so the whole preview panel (frame,
- * transport and hint) fits in the viewport height.
+ * Color roles of Google Material 3 (as on gemini.google.com) plus YouTube
+ * red. data-theme on <html> picks the set (index.html applies the saved
+ * choice before the first paint); the fullscreen preview sets
+ * data-theme="dark" on itself so its controls stay readable on black.
  */
-.studio-grid {
-  --preview-w: min(440px, max(240px, calc((100vh - 18rem) * 9 / 16)));
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-container-low: #f8fafd;
+  --surface-container: #f0f4f9;
+  --surface-container-high: #e9eef6;
+  --surface-container-highest: #dde3ea;
+  --on-surface: #1f1f1f;
+  --on-surface-variant: #444746;
+  --outline: #747775;
+  --outline-variant: #c4c7c5;
+  --primary: #0b57d0;
+  --on-primary: #ffffff;
+  --primary-container: #d3e3fd;
+  --on-primary-container: #041e49;
+  --secondary-container: #c2e7ff;
+  --on-secondary-container: #001d35;
+  --error: #b3261e;
+  --error-container: #f9dedc;
+  --on-error-container: #410e0b;
+  --warning: #b06000;
+  --inverse-surface: #303030;
+  --inverse-on-surface: #f2f2f2;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: #131314;
+  --surface-container-low: #1b1b1b;
+  --surface-container: #1e1f20;
+  --surface-container-high: #282a2c;
+  --surface-container-highest: #333537;
+  --on-surface: #e3e3e3;
+  --on-surface-variant: #c4c7c5;
+  --outline: #8e918f;
+  --outline-variant: #444746;
+  --primary: #a8c7fa;
+  --on-primary: #062e6f;
+  --primary-container: #0842a0;
+  --on-primary-container: #d3e3fd;
+  --secondary-container: #004a77;
+  --on-secondary-container: #c2e7ff;
+  --error: #f2b8b5;
+  --error-container: #8c1d18;
+  --on-error-container: #f9dedc;
+  --warning: #fdd663;
+  --inverse-surface: #e3e3e3;
+  --inverse-on-surface: #303030;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+  --color-error: var(--error);
+  --color-error-container: var(--error-container);
+  --color-on-error-container: var(--on-error-container);
+  --color-warning: var(--warning);
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  /* YouTube red: the brightest red that keeps white text at 4.5:1 for
+     the export button. */
+  --color-action: #ec0032;
+  --font-sans: 'Google Sans Flex', 'Noto Sans KR', ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--surface);
+    color: var(--on-surface);
+    -webkit-font-smoothing: antialiased;
+    scrollbar-color: var(--outline-variant) transparent;
+  }
+
+  body {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  input[type='range'] {
+    accent-color: var(--primary);
+  }
+
+  /* Native dialogs are centered by margin: auto, which preflight resets. */
+  dialog {
+    margin: auto;
+  }
+
+  input[type='color'] {
+    appearance: none;
+  }
+
+  input[type='color']::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  input[type='color']::-webkit-color-swatch {
+    border: none;
+    border-radius: 9999px;
+  }
+
+  input[type='color']::-moz-color-swatch {
+    border: none;
+    border-radius: 9999px;
+  }
+}
+
+.material-symbols-rounded {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+  user-select: none;
+}
+
+.material-symbols-rounded.icon-filled {
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* The only gradient: the "Shorts 만들기" button and analysis animations. */
+.brand-gradient {
+  background-image: linear-gradient(
+    90deg,
+    #ec0032,
+    #e01378 33%,
+    #9334e6 66%,
+    #0b57d0
+  );
+}
+
+/* Unlayered rules beat utilities, so disabled:bg-none cannot clear it. */
+.brand-gradient:disabled {
+  background-image: none;
+}
+
+@keyframes spin-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes slide-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise-in {
+  animation: rise-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.analysis-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 9rem;
+  height: 9rem;
+}
+
+.analysis-orb-glow,
+.analysis-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    #ec0032,
+    #e01378,
+    #9334e6,
+    #0b57d0,
+    #ec0032
+  );
+  animation: spin-turn 3s linear infinite;
+}
+
+.analysis-orb-glow {
+  inset: -1.5rem;
+  filter: blur(2rem);
+  opacity: 0.35;
+  animation-duration: 9s;
+}
+
+.analysis-orb-ring {
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 6px),
+    #000 calc(100% - 5px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 6px),
+    #000 calc(100% - 5px)
+  );
+}
+
+/* A linear progress indicator; the bar takes the text color. */
+.progress-track {
+  position: relative;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--surface-container-highest);
+}
+
+.progress-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: currentColor;
+  animation: slide-indeterminate 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.progress-indeterminate.brand-gradient {
+  background-image: none;
+}
+
+.progress-indeterminate.brand-gradient::after {
+  background: linear-gradient(90deg, #ec0032, #e01378, #9334e6, #0b57d0);
+}
+
+dialog[open] {
+  animation: rise-in 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-orb-glow,
+  .analysis-orb-ring,
+  .progress-indeterminate::after,
+  .rise-in,
+  dialog[open] {
+    animation: none;
+  }
+}
+
+/*
+ * Editor layout. Below 1024px everything stacks: clips, preview, tabs.
+ * From 1024px the preview gets its own column and stays pinned under the
+ * header while the clips and tabs scroll; from 1280px the tabs move to a
+ * third column. --preview-w sizes the 9:16 frame so the whole preview card
+ * fits under the header, ending 1rem above the bottom of the screen; the
+ * editor's bottom padding is also 1rem so the pinned card is never pushed
+ * under the header at the end of the page.
+ */
+.editor-grid {
+  --header-h: 4rem;
+  --preview-w: min(
+    420px,
+    max(240px, calc((100dvh - var(--header-h) - 9.5rem) * 9 / 16))
+  );
   display: grid;
   gap: 1rem;
   align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'clips'
+    'preview'
+    'tabs';
 }
 
-.studio-grid > * {
+.editor-grid > * {
   min-width: 0;
 }
 
+.editor-clips {
+  grid-area: clips;
+}
+
+.editor-preview {
+  grid-area: preview;
+  justify-self: center;
+  width: min(100%, calc(var(--preview-w) + 2rem));
+}
+
+.editor-tabs {
+  grid-area: tabs;
+}
+
 @media (min-width: 1024px) {
-  .studio-grid {
+  .editor-grid {
     grid-template-columns: minmax(0, 1fr) calc(var(--preview-w) + 2rem);
+    grid-template-areas:
+      'clips preview'
+      'tabs preview';
   }
 
-  .studio-editors {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .studio-controls {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .studio-preview {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+  .editor-preview {
+    width: auto;
+    justify-self: stretch;
     position: sticky;
-    top: 5rem;
-    max-height: calc(100vh - 6rem);
-    overflow-y: auto;
+    top: calc(var(--header-h) + 1rem);
   }
 }
 
 @media (min-width: 1280px) {
-  .studio-grid {
+  .editor-grid {
     grid-template-columns:
-      minmax(0, 1fr) minmax(320px, 380px) calc(var(--preview-w) + 2rem);
-  }
-
-  .studio-controls {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .studio-preview {
-    grid-column: 3;
-    grid-row: 1;
+      minmax(340px, 1fr)
+      calc(var(--preview-w) + 2rem)
+      minmax(380px, 1.15fr);
+    grid-template-areas: 'clips preview tabs';
   }
 }
+
+/*
+ * Horizontal Scenario strip above the editor grid: full titles, sideways
+ * scrolling with a thin scrollbar and soft fades on the edges that still
+ * have hidden Scenarios.
+ */
+.scenario-strip-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, currentColor 25%, transparent)
+    transparent;
+  padding-bottom: 2px;
+  --fade-l: 0px;
+  --fade-r: 0px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-l),
+    #000 calc(100% - var(--fade-r)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-l),
+    #000 calc(100% - var(--fade-r)),
+    transparent 100%
+  );
+}
+
+.scenario-strip-scroller.fade-left {
+  --fade-l: 2.5rem;
+}
+
+.scenario-strip-scroller.fade-right {
+  --fade-r: 2.5rem;
+}
+
+.scenario-strip-scroller::-webkit-scrollbar {
+  height: 6px;
+}
+
+.scenario-strip-scroller::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in srgb, currentColor 25%, transparent);
+}
+
 
 .studio-frame {
   width: 100%;
@@ -83,8 +424,4 @@
 .studio-stage:fullscreen .studio-frame,
 .studio-stage:fullscreen .studio-controls-bar {
   width: min(100vw - 2rem, calc((100vh - 7rem) * 9 / 16));
-}
-
-.studio-stage:fullscreen .studio-hint {
-  display: none;
 }
