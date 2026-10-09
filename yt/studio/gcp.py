@@ -44,10 +44,7 @@ def _get_adc_token() -> str | None:
     credentials, _ = google_auth.default(scopes=[_CLOUD_PLATFORM_SCOPE])
     credentials.refresh(google_auth_requests.Request())
     return credentials.token
-  except (
-      google_auth_exceptions.GoogleAuthError,
-      google_auth_exceptions.TransportError,
-  ) as exc:
+  except google_auth_exceptions.GoogleAuthError as exc:
     logger.debug('Failed to get ADC token: %s', exc)
     return None
 

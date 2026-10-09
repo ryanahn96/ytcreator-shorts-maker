@@ -8,6 +8,7 @@
 import {useState, type ReactNode} from 'react';
 
 import {fontStack, useFonts} from '../lib/fonts';
+import {sameJson} from '../lib/history';
 import type {FontEntry, HeadlineStyle, LookStyle, TextStyle, VideoFit} from '../types';
 import {Icon} from './Icon';
 import {ColorField, IconButton, Section, SliderField, STATE_LAYER, Toggle} from './ui';
@@ -19,10 +20,6 @@ const MAX_TEXT_OUTLINE = 12;
 const MAX_BORDER_WIDTH = 40;
 
 const FONT_SAMPLE = '가나다 ABC 123';
-
-function sameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 function StyleSection(props: {
   title: string;

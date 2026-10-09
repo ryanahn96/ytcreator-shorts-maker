@@ -19,7 +19,7 @@ export const STATE_LAYER =
   'focus-visible:before:opacity-10 active:before:opacity-12 ' +
   'disabled:before:hidden';
 
-export type ButtonVariant =
+type ButtonVariant =
   | 'filled'
   | 'tonal'
   | 'outlined'
@@ -87,7 +87,7 @@ export function Button(props: {
   );
 }
 
-export type IconButtonVariant = 'standard' | 'filled';
+type IconButtonVariant = 'standard' | 'filled';
 
 const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
   standard: 'text-on-surface-variant disabled:text-on-surface/38',
@@ -179,14 +179,12 @@ export function Section(props: {
   );
 }
 
-const FIELD =
+/** Class of a text input in the studio's outlined field style. */
+export const TEXT_FIELD =
   'h-9 rounded-lg border border-outline-variant bg-surface px-2.5 text-sm ' +
   'text-on-surface tabular-nums transition-colors hover:border-outline ' +
   'focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ' +
   'disabled:opacity-40';
-
-/** Class of a text input in the studio's outlined field style. */
-export const TEXT_FIELD = FIELD;
 
 /**
  * A number input that commits on blur or Enter. The input remounts when
@@ -196,19 +194,17 @@ export function NumberField(props: {
   label: string;
   value: number;
   step: number;
-  min?: number;
-  digits?: number;
-  suffix?: string;
+  min: number;
+  digits: number;
+  suffix: string;
   onCommit: (value: number) => void;
 }) {
-  const shown =
-    props.digits === undefined ? String(props.value) : props.value.toFixed(props.digits);
+  const shown = props.value.toFixed(props.digits);
   const commit = (input: HTMLInputElement) => {
     const text = input.value.trim();
     const parsed = Number(text);
     if (text !== shown && text !== '' && Number.isFinite(parsed)) {
-      const low = props.min ?? Number.NEGATIVE_INFINITY;
-      const clamped = Math.max(low, parsed);
+      const clamped = Math.max(props.min, parsed);
       if (clamped !== props.value) {
         props.onCommit(clamped);
       }
@@ -231,9 +227,9 @@ export function NumberField(props: {
               event.currentTarget.blur();
             }
           }}
-          className={`${FIELD} w-24 text-right`}
+          className={`${TEXT_FIELD} w-24 text-right`}
         />
-        {props.suffix && <span className="text-on-surface-variant">{props.suffix}</span>}
+        <span className="text-on-surface-variant">{props.suffix}</span>
       </span>
     </label>
   );
@@ -329,7 +325,7 @@ export function ColorField(props: {
               event.currentTarget.blur();
             }
           }}
-          className={`${FIELD} w-24 uppercase`}
+          className={`${TEXT_FIELD} w-24 uppercase`}
         />
       </span>
     </div>
@@ -484,11 +480,9 @@ export function ProgressBar(props: {
   );
 }
 
-export type NoticeTone = 'error' | 'warning';
-
 /** An inline message; `onClose` adds a close button. */
 export function Notice(props: {
-  tone: NoticeTone;
+  tone: 'error' | 'warning';
   children: ReactNode;
   onClose?: () => void;
   className?: string;
@@ -509,15 +503,13 @@ export function Notice(props: {
       />
       <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{props.children}</div>
       {props.onClose && (
-        <button
-          type="button"
-          aria-label="닫기"
-          title="닫기"
+        <IconButton
+          label="닫기"
+          icon="close"
+          size="sm"
           onClick={props.onClose}
-          className={`-my-1 -mr-2 ${iconButtonClass('standard', 'sm')}`}
-        >
-          <Icon name="close" size={18} />
-        </button>
+          className="-my-1 -mr-2"
+        />
       )}
     </div>
   );
@@ -532,9 +524,9 @@ export function Dialog(props: {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  actions?: ReactNode;
-  /** Max width in CSS pixels; defaults to 560. */
-  width?: number;
+  actions: ReactNode;
+  /** Max width in CSS pixels. */
+  width: number;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -560,7 +552,7 @@ export function Dialog(props: {
         }
       }}
       className="w-[calc(100vw-2rem)] rounded-[28px] border-0 bg-surface-container-high p-0 text-on-surface shadow-2xl backdrop:bg-[rgb(0_0_0/0.45)]"
-      style={{maxWidth: props.width ?? 560}}
+      style={{maxWidth: props.width}}
     >
       {props.open && (
         <div className="flex max-h-[calc(100dvh-4rem)] flex-col">
@@ -570,11 +562,9 @@ export function Dialog(props: {
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4 pb-2 text-sm text-on-surface-variant">
             {props.children}
           </div>
-          {props.actions && (
-            <div className="flex flex-wrap items-center justify-end gap-2 px-6 pt-2 pb-6">
-              {props.actions}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-2 px-6 pt-2 pb-6">
+            {props.actions}
+          </div>
         </div>
       )}
     </dialog>

@@ -56,10 +56,8 @@ function pythonBackendPlugin(): Plugin {
       });
 
       const cleanup = () => {
-        if (pyProc && !pyProc.killed) {
-          pyProc.kill();
-          pyProc = null;
-        }
+        pyProc?.kill();
+        pyProc = null;
       };
 
       server.httpServer?.on('close', cleanup);
@@ -68,21 +66,19 @@ function pythonBackendPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
-  return {
-    plugins: [react(), tailwindcss(), pythonBackendPlugin()],
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-      proxy: {
-        '/api': {
-          target: BACKEND_TARGET,
-          changeOrigin: true,
-          xfwd: true,
-          timeout: 300000,
-          proxyTimeout: 300000,
-        },
+export default defineConfig({
+  plugins: [react(), tailwindcss(), pythonBackendPlugin()],
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: BACKEND_TARGET,
+        changeOrigin: true,
+        xfwd: true,
+        timeout: 300000,
+        proxyTimeout: 300000,
       },
     },
-  };
+  },
 });

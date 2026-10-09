@@ -20,7 +20,6 @@ export function ScenarioAudioControls(props: {
   dispatch: Dispatch<EditorAction>;
 }) {
   const {config, scenario, assets, dispatch} = props;
-  const composition = config.composition;
   const music = scenario.music;
   const musicRecord = music ? assets.records.get(music.assetId) : undefined;
   const [busy, setBusy] = useState(false);
@@ -35,7 +34,7 @@ export function ScenarioAudioControls(props: {
         type: 'setMusic',
         music: {
           assetId: asset.assetId,
-          volume: music?.volume ?? composition.defaultMusicVolume,
+          volume: music?.volume ?? config.composition.defaultMusicVolume,
         },
       });
     } catch (reason) {
@@ -46,48 +45,46 @@ export function ScenarioAudioControls(props: {
   };
 
   return (
-    <div className="space-y-4">
-      <Section
-        title="배경음악"
-        actions={
-          <FilePicker
-            label={music ? '다른 음악' : '음악 추가'}
-            accept="audio/*"
-            busy={busy}
-            icon="music_note"
-            onFile={addMusic}
+    <Section
+      title="배경음악"
+      actions={
+        <FilePicker
+          label={music ? '다른 음악' : '음악 추가'}
+          accept="audio/*"
+          busy={busy}
+          icon="music_note"
+          onFile={addMusic}
+        />
+      }
+    >
+      {music && (
+        <div className="space-y-3">
+          <p className="truncate text-sm text-on-surface">
+            {musicRecord
+              ? `${musicRecord.filename} · ${formatLength(musicRecord.durationSec)}`
+              : music.assetId}
+          </p>
+          <SliderField
+            label="음악 볼륨"
+            value={music.volume}
+            min={0}
+            max={config.maxMusicVolume}
+            step={0.01}
+            format={(volume) => `${Math.round(volume * 100)}%`}
+            onChange={(volume) => dispatch({type: 'setMusic', music: {...music, volume}})}
           />
-        }
-      >
-        {music && (
-          <div className="space-y-3">
-            <p className="truncate text-sm text-on-surface">
-              {musicRecord
-                ? `${musicRecord.filename} · ${formatLength(musicRecord.durationSec)}`
-                : music.assetId}
-            </p>
-            <SliderField
-              label="음악 볼륨"
-              value={music.volume}
-              min={0}
-              max={config.maxMusicVolume}
-              step={0.01}
-              format={(volume) => `${Math.round(volume * 100)}%`}
-              onChange={(volume) => dispatch({type: 'setMusic', music: {...music, volume}})}
-            />
-            <Button
-              variant="text"
-              size="sm"
-              icon="delete"
-              className="-ms-3"
-              onClick={() => dispatch({type: 'setMusic', music: null})}
-            >
-              음악 빼기
-            </Button>
-          </div>
-        )}
-        {error && <p className="text-xs text-error">{error}</p>}
-      </Section>
-    </div>
+          <Button
+            variant="text"
+            size="sm"
+            icon="delete"
+            className="-ms-3"
+            onClick={() => dispatch({type: 'setMusic', music: null})}
+          >
+            음악 빼기
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-xs text-error">{error}</p>}
+    </Section>
   );
 }

@@ -15,6 +15,7 @@ import type {EditorAction} from '../lib/editor';
 import {formatClock, formatDuration} from '../lib/format';
 import {
   firstWordAtOrAfter,
+  roundMs,
   snapToWord,
   wordsStartingIn,
   type ResolvedClip,
@@ -41,26 +42,14 @@ import {
   Toggle,
 } from './ui';
 
-function roundMs(seconds: number): number {
-  return Math.round(seconds * 1000) / 1000;
-}
-
 /** The word start nearest the Clip's middle that leaves both halves valid. */
 function splitPoint(resolved: ResolvedClip, minSec: number): number | null {
   const {clip, words} = resolved;
-  const middle = (clip.startSec + clip.endSec) / 2;
   const fits = (seconds: number) =>
     seconds - clip.startSec >= minSec && clip.endSec - seconds >= minSec;
-  let best: number | null = null;
-  for (const word of words) {
-    const closer =
-      best === null ||
-      Math.abs(word.startSec - middle) < Math.abs(best - middle);
-    if (fits(word.startSec) && closer) {
-      best = word.startSec;
-    }
-  }
-  return best ?? (fits(middle) ? middle : null);
+  const middle = (clip.startSec + clip.endSec) / 2;
+  const best = snapToWord(words.filter((word) => fits(word.startSec)), middle, 'start');
+  return fits(best) ? best : null;
 }
 
 /** A newClipSec-long range starting at the first word after `after`. */
@@ -565,16 +554,10 @@ function ClipItem(props: {
                 : `${formatClock(clip.startSec)} – ${formatClock(clip.endSec)}`}
             </span>
           </span>
-          {mediaKind === 'image' && (
+          {mediaKind !== 'source' && (
             <span className="inline-flex items-center gap-1 rounded-full bg-tertiary-container px-2 py-0.5 text-[11px] font-medium text-on-tertiary-container">
-              <Icon name="image" size={13} />
-              삽입 이미지
-            </span>
-          )}
-          {mediaKind === 'video' && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-tertiary-container px-2 py-0.5 text-[11px] font-medium text-on-tertiary-container">
-              <Icon name="movie" size={13} />
-              삽입 영상{clip.muteAudio ? ' (무음)' : ''}
+              <Icon name={mediaKind === 'image' ? 'image' : 'movie'} size={13} />
+              {mediaKind === 'image' ? '삽입 이미지' : `삽입 영상${clip.muteAudio ? ' (무음)' : ''}`}
             </span>
           )}
           {peak && (

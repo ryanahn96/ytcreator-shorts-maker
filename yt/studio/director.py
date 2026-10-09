@@ -22,7 +22,7 @@ import datetime
 import json
 import pathlib
 import time
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from google import genai
 from google.auth import exceptions as google_auth_exceptions
@@ -70,6 +70,24 @@ class UploadedVideo:
   media_path: pathlib.Path
 
 
+class GeminiJob(Protocol):
+  """What run_gemini needs from a job: the analysis or an Edit Request."""
+
+  @property
+  def video(self) -> types.Part | None:
+    """The inline video part, or None for a text-only request."""
+
+  @property
+  def system_instruction(self) -> str:
+    """The system instruction sent with the request (unless cached)."""
+
+  def schema(self) -> dict[str, Any]:
+    """The JSON Schema of the answer."""
+
+  def request_text(self, inline_schema: dict[str, Any] | None) -> str:
+    """The user turn; spells out inline_schema when it is given."""
+
+
 @dataclasses.dataclass(frozen=True)
 class _Job:
   """What one analysis asks Gemini for."""
@@ -83,6 +101,10 @@ class _Job:
   transcript: models.StoredTranscript | None
   # Optional YouTube Audience Retention and caption context.
   youtube_context: models.YouTubeVideoContext | None = None
+
+  @property
+  def system_instruction(self) -> str:
+    return prompts.SYSTEM_INSTRUCTION
 
   def schema(self) -> dict[str, Any]:
     return prompts.response_schema(
@@ -102,7 +124,7 @@ class _Job:
 
 
 @dataclasses.dataclass(frozen=True)
-class _GeminiRun:
+class GeminiRun:
   data: dict[str, Any]
   # The model that gave the answer.
   model: str
@@ -124,15 +146,15 @@ def progress(stage: str, message: str = '') -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
+def as_dict(value: Any) -> dict[str, Any]:
   return value if isinstance(value, dict) else {}
 
 
-def _as_list(value: Any) -> list[Any]:
+def as_list(value: Any) -> list[Any]:
   return value if isinstance(value, list) else []
 
 
-def _text(value: Any) -> str:
+def clean_text(value: Any) -> str:
   return value.strip() if isinstance(value, str) else ''
 
 
@@ -156,31 +178,23 @@ def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
   "1:15"), bracketed/unit strings ("75s", "[01:15]"), as well as MMSS
   representation (e.g. 610 for 6:10 when duration_sec < 610) and milliseconds.
   """
-  if value is None or isinstance(value, bool):
-    return None
-  if isinstance(value, (int, float)):
-    num = float(value)
-  elif isinstance(value, str):
-    cleaned = value.strip().strip('[]() ')
-    if cleaned.endswith(('s', 'S')):
-      cleaned = cleaned[:-1].strip()
-    if ':' in cleaned:
+  if isinstance(value, str):
+    value = value.strip().strip('[]() ')
+    if value.endswith(('s', 'S')):
+      value = value[:-1].strip()
+    if ':' in value:
       try:
-        parts = [float(p) for p in cleaned.split(':')]
+        parts = [float(p) for p in value.split(':')]
       except ValueError:
         return None
       if len(parts) == 2:
-        num = parts[0] * 60.0 + parts[1]
+        value = parts[0] * 60.0 + parts[1]
       elif len(parts) == 3:
-        num = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
+        value = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
       else:
         return None
-    else:
-      try:
-        num = float(cleaned)
-      except ValueError:
-        return None
-  else:
+  num = _float(value)
+  if num is None:
     return None
 
   if duration_sec > 0 and num > duration_sec:
@@ -372,12 +386,12 @@ class _VideoCache:
       pass
 
 
-async def _run_gemini(
+async def run_gemini(
     client: genai.Client,
-    job: _Job,
+    job: GeminiJob,
     cache: _VideoCache | None,
     emit: Emit,
-) -> _GeminiRun:
+) -> GeminiRun:
   """Calls Gemini with retries and model fallback.
 
   Structured output (response_json_schema) is requested first. If the API
@@ -407,7 +421,7 @@ async def _run_gemini(
       # A cache carries its own system instruction; the API rejects both.
       generation_config = types.GenerateContentConfig(
           system_instruction=(
-              None if cached is not None else prompts.SYSTEM_INSTRUCTION
+              None if cached is not None else job.system_instruction
           ),
           cached_content=cached.name if cached is not None else None,
           response_mime_type='application/json' if structured else None,
@@ -484,7 +498,7 @@ async def _run_gemini(
             )
             for write_model, tokens in cache.writes
         )
-      return _GeminiRun(
+      return GeminiRun(
           data=data, model=model, cost_usd=pricing.total_usd(costs)
       )
   details = '\n'.join(
@@ -503,7 +517,7 @@ async def _run_gemini(
 
 
 def _crop(raw: Any) -> models.CropRegion:
-  data = _as_dict(raw)
+  data = as_dict(raw)
   center_x = _float(data.get('centerX'))
   center_y = _float(data.get('centerY'))
   # Keep initial scenario zoom at 1.0 so the source frame is never degraded
@@ -517,12 +531,12 @@ def _crop(raw: Any) -> models.CropRegion:
 
 def _framing(raw: Any) -> models.FramingLayout:
   """Reads a framing; a missing one (fast re-analysis) shows the full frame."""
-  return models.FramingLayout(crop=_crop(_as_dict(raw).get('crop')))
+  return models.FramingLayout(crop=_crop(as_dict(raw).get('crop')))
 
 
 def _headline(raw: Any) -> models.Headline:
-  data = _as_dict(raw)
-  lines = [_text(line) for line in _as_list(data.get('lines'))]
+  data = as_dict(raw)
+  lines = [clean_text(line) for line in as_list(data.get('lines'))]
   return models.Headline(lines=[line for line in lines if line])
 
 
@@ -564,13 +578,13 @@ def _transcript_from_answer(data: dict[str, Any]) -> ingestion.Transcript:
       or data.get('lines')
       or data.get('transcript')
   )
-  for raw_line in _as_list(raw_lines):
-    entry = _as_dict(raw_line)
+  for raw_line in as_list(raw_lines):
+    entry = as_dict(raw_line)
     start = _clip_time(
         entry, 0.0, 'startSec', 'start_sec', 'start', 'startTime'
     )
     end = _clip_time(entry, 0.0, 'endSec', 'end_sec', 'end', 'endTime')
-    text = _text(entry.get('text'))
+    text = clean_text(entry.get('text'))
     if start is not None and end is not None and text:
       if start > end:
         start, end = end, start
@@ -607,14 +621,14 @@ def _build_scenarios(
   Warnings name Scenarios and Clips the way the UI does ("Shorts", "클립").
   """
   scenarios = []
-  for s_number, raw in enumerate(_as_list(data.get('scenarios')), start=1):
-    scenario = _as_dict(raw)
+  for s_number, raw in enumerate(as_list(data.get('scenarios')), start=1):
+    scenario = as_dict(raw)
     label = f'Shorts {s_number}'
     clips = []
     for c_number, raw_clip in enumerate(
-        _as_list(scenario.get('clips')), start=1
+        as_list(scenario.get('clips')), start=1
     ):
-      clip_data = _as_dict(raw_clip)
+      clip_data = as_dict(raw_clip)
       seconds = _seconds_range(clip_data, duration_sec)
       if seconds is None:
         warnings.append(f'{label} 클립 {c_number}: 범위가 올바르지 않아 뺐습니다.')
@@ -624,8 +638,8 @@ def _build_scenarios(
               clip_id=f's{s_number}-c{c_number}',
               start_sec=seconds[0],
               end_sec=seconds[1],
-              speaker=_text(clip_data.get('speaker')),
-              purpose=_text(clip_data.get('purpose')),
+              speaker=clean_text(clip_data.get('speaker')),
+              purpose=clean_text(clip_data.get('purpose')),
           )
       )
     if not clips:
@@ -634,8 +648,8 @@ def _build_scenarios(
     scenarios.append(
         models.Scenario(
             scenario_id=f's{s_number}',
-            title=_text(scenario.get('title')) or label,
-            rationale=_text(scenario.get('rationale')),
+            title=clean_text(scenario.get('title')) or label,
+            rationale=clean_text(scenario.get('rationale')),
             look=models.Look(
                 headline=_headline(scenario.get('headline')),
                 framing_layout=_framing(scenario.get('framingLayout')),
@@ -778,6 +792,24 @@ async def _ensure_source_silences(
   return UploadedVideo(source=updated, media_path=upload.media_path)
 
 
+async def _prepare_audio_and_transcript(
+    upload: UploadedVideo,
+    transcript: models.StoredTranscript | None,
+    workspace: storage.Workspace,
+    warnings: list[str],
+    emit: Emit,
+) -> tuple[UploadedVideo, models.StoredTranscript | None]:
+  """Detects silences and transcribes audio with Speech-to-Text V2."""
+  upload = await _ensure_source_silences(upload, workspace, emit)
+  if not upload.source.has_audio:
+    warnings.append('업로드한 영상에 오디오 트랙이 없어 받아쓰기를 할 수 없습니다.')
+  elif transcript is None or transcript.model.startswith('youtube:'):
+    upgraded = await _transcribe_with_speech(upload, workspace, warnings, emit)
+    if upgraded is not None:
+      transcript = upgraded
+  return upload, transcript
+
+
 async def _no_video() -> types.Part | None:
   return None
 
@@ -820,11 +852,14 @@ async def analyze(
     raise DirectorError(settings.gemini_setup_error)
   source_id = upload.source.source_id
   warnings: list[str] = []
+  audio_warnings: list[str] = []
   transcript = await asyncio.to_thread(workspace.load_transcript, source_id)
   has_ever_analyzed = transcript is not None
   needs_video = not has_ever_analyzed or request.mode != 'fast'
-  upload, yt_context, video = await asyncio.gather(
-      _ensure_source_silences(upload, workspace, emit),
+  (upload, transcript), yt_context, video = await asyncio.gather(
+      _prepare_audio_and_transcript(
+          upload, transcript, workspace, audio_warnings, emit
+      ),
       _resolve_youtube_context(
           request,
           source_id,
@@ -836,23 +871,12 @@ async def analyze(
       ),
       _prepare_video(upload, workspace, emit) if needs_video else _no_video(),
   )
-  source = ingestion.source_video_from_upload(upload.source)
-  if not upload.source.has_audio:
-    warnings.append('업로드한 영상에 오디오 트랙이 없어 받아쓰기를 할 수 없습니다.')
-  if (
-      transcript is not None
-      and transcript.model.startswith('youtube:')
-      and upload.source.has_audio
-  ):
-    upgraded = await _transcribe_with_speech(
-        upload, workspace, warnings, emit
-    )
-    if upgraded is not None:
-      transcript = upgraded
-  if transcript is None and upload.source.has_audio:
-    transcript = await _transcribe_with_speech(
-        upload, workspace, warnings, emit
-    )
+  warnings.extend(audio_warnings)
+  source = models.SourceVideo(
+      title=pathlib.PurePath(upload.source.filename).stem,
+      duration_sec=upload.source.media.duration_sec,
+      fps=upload.source.media.fps,
+  )
   if (
       transcript is None
       and yt_context is not None
@@ -892,7 +916,7 @@ async def analyze(
       transcript=transcript,
       youtube_context=yt_context,
   )
-  run = await _run_gemini(client, job, cache, emit)
+  run = await run_gemini(client, job, cache, emit)
   await emit(progress('validate'))
   if kind == 'initial':
     extracted = _transcript_from_answer(run.data)

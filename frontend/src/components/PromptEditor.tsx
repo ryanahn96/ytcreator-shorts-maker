@@ -1,4 +1,4 @@
-/** The user-editable Editorial Prompt (편집 요청) with a reset to the default. */
+/** The user-editable Editorial Prompt (Shorts 생성 프롬프트) with a reset to the default. */
 
 import {Button} from './ui';
 
@@ -12,7 +12,7 @@ export function PromptEditor(props: {
   return (
     <div className="space-y-2">
       <textarea
-        aria-label="편집 요청"
+        aria-label="Shorts 생성 프롬프트"
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
         rows={props.rows ?? 12}

@@ -13,6 +13,7 @@ import {
 } from 'react';
 
 import {formatClock} from '../lib/format';
+import {clamp, roundMs} from '../lib/timeline';
 import type {
   TimeRange,
   YouTubeRetentionPeak,
@@ -28,16 +29,8 @@ interface Drag {
   range: TimeRange;
 }
 
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), high);
-}
-
 function isHandle(value: string | undefined): value is RangeHandle {
   return value === 'start' || value === 'end' || value === 'move';
-}
-
-function roundMs(seconds: number): number {
-  return Math.round(seconds * 1000) / 1000;
 }
 
 function keyDelta(event: KeyboardEvent, step: number): number {
@@ -80,37 +73,23 @@ function RetentionOverlay(props: {
       aria-hidden
       className="pointer-events-none absolute inset-0 h-full w-full overflow-hidden rounded-xl"
     >
-      {peaks.map((peak, idx) => {
-        const x1 = clamp(((peak.startSec - bounds.startSec) / span) * 100, 0, 100);
-        const x2 = clamp(((peak.endSec - bounds.startSec) / span) * 100, 0, 100);
+      {[
+        ...peaks.map((band) => ({band, fill: 'fill-primary/15'})),
+        ...lows.map((band) => ({band, fill: 'fill-error/15'})),
+      ].map(({band, fill}, idx) => {
+        const x1 = clamp(((band.startSec - bounds.startSec) / span) * 100, 0, 100);
+        const x2 = clamp(((band.endSec - bounds.startSec) / span) * 100, 0, 100);
         if (x2 <= x1) {
           return null;
         }
         return (
           <rect
-            key={`peak-${idx}`}
+            key={idx}
             x={x1}
             y={0}
             width={x2 - x1}
             height={44}
-            className="fill-primary/15"
-          />
-        );
-      })}
-      {lows.map((low, idx) => {
-        const x1 = clamp(((low.startSec - bounds.startSec) / span) * 100, 0, 100);
-        const x2 = clamp(((low.endSec - bounds.startSec) / span) * 100, 0, 100);
-        if (x2 <= x1) {
-          return null;
-        }
-        return (
-          <rect
-            key={`low-${idx}`}
-            x={x1}
-            y={0}
-            width={x2 - x1}
-            height={44}
-            className="fill-error/15"
+            className={fill}
           />
         );
       })}
@@ -175,7 +154,6 @@ export function RangeSlider(props: {
   onCommit: (range: TimeRange, snap: RangeHandle | null) => void;
 }) {
   const {bounds, range, minGapSec} = props;
-  const trackRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -211,12 +189,12 @@ export function RangeSlider(props: {
         };
   };
 
-  const secondsAt = (clientX: number): number => {
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) {
+  const secondsAt = (event: PointerEvent<HTMLDivElement>): number => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) {
       return bounds.startSec;
     }
-    return bounds.startSec + clamp((clientX - rect.left) / rect.width, 0, 1) * span;
+    return bounds.startSec + clamp((event.clientX - rect.left) / rect.width, 0, 1) * span;
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -224,7 +202,7 @@ export function RangeSlider(props: {
       return;
     }
     event.preventDefault();
-    const seconds = secondsAt(event.clientX);
+    const seconds = secondsAt(event);
     const target =
       event.target instanceof HTMLElement
         ? event.target.closest<HTMLElement>('[data-handle]')
@@ -254,7 +232,7 @@ export function RangeSlider(props: {
     current.range = moved(
       current.origin,
       current.handle,
-      secondsAt(event.clientX),
+      secondsAt(event),
       current.grabSec,
     );
     props.onDraft(current.range);
@@ -297,7 +275,6 @@ export function RangeSlider(props: {
   return (
     <div className="select-none">
       <div
-        ref={trackRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(event) => finish(event, true)}

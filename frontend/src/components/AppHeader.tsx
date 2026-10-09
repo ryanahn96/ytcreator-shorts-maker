@@ -4,9 +4,8 @@ import type {ReactNode} from 'react';
 
 import type {CreatorProfile} from '../types';
 import {BrandMark, Icon} from './Icon';
+import {ThemeMenu} from './ThemeMenu';
 import {IconButton} from './ui';
-
-export const APP_NAME = 'Agentic Shorts 생성 스튜디오';
 
 /** The app icon with the app name; `titleClassName` can hide the name. */
 export function Brand(props: {titleClassName?: string}) {
@@ -16,7 +15,7 @@ export function Brand(props: {titleClassName?: string}) {
       <h1
         className={`truncate text-lg font-medium tracking-tight text-on-surface ${props.titleClassName ?? ''}`}
       >
-        {APP_NAME}
+        Agentic Shorts 생성 스튜디오
       </h1>
     </div>
   );
@@ -60,13 +59,16 @@ export function CreatorBadge(props: {
   );
 }
 
-/** A plain top bar: the brand on the left, `children` on the right. */
+/** A plain top bar: the brand on the left, `children` and the theme menu on the right. */
 export function AppHeader(props: {children?: ReactNode}) {
   return (
     <header className="sticky top-0 z-30 bg-surface">
       <div className="mx-auto flex h-16 max-w-[1720px] items-center gap-3 px-4 sm:px-6">
         <Brand />
-        <div className="ms-auto flex shrink-0 items-center gap-1.5">{props.children}</div>
+        <div className="ms-auto flex shrink-0 items-center gap-1.5">
+          {props.children}
+          <ThemeMenu />
+        </div>
       </div>
     </header>
   );

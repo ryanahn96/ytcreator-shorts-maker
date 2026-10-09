@@ -15,6 +15,7 @@ import type {
   Look,
   Scenario,
   TimeRange,
+  TranscriptWord,
 } from '../types';
 
 export interface EditorState {
@@ -38,7 +39,10 @@ export type EditorAction =
   | {type: 'selectClip'; index: number}
   | {type: 'setClipRange'; index: number; range: TimeRange}
   | {type: 'setClipMute'; index: number; muteAudio: boolean}
+  /** Swaps the Clip at `index` with the one `offset` places away. */
   | {type: 'moveClip'; index: number; offset: number}
+  /** Takes the Clip at `index` out and puts it back at position `to`. */
+  | {type: 'moveClipTo'; index: number; to: number}
   | {type: 'splitClip'; index: number; atSec: number}
   | {type: 'deleteClip'; index: number}
   | {type: 'addClip'; range: TimeRange; afterIndex?: number}
@@ -60,6 +64,8 @@ export type EditorAction =
   | {type: 'setWordText'; index: number; text: string | null}
   | {type: 'setLineWordsText'; wordIndices: readonly number[]; text: string}
   | {type: 'toggleCutWord'; index: number}
+  /** Cuts (or restores) every word listed; applying it twice changes nothing. */
+  | {type: 'setWordsCut'; wordIndices: readonly number[]; cut: boolean}
   | {type: 'setCaptionMaxChars'; maxChars: number};
 
 export function createEditorState(
@@ -103,6 +109,61 @@ function validMediaRange(
   const startSec = Math.max(0, range.startSec);
   const endSec = Math.max(startSec + minSec, range.endSec);
   return {startSec, endSec};
+}
+
+/** The value in `values` closest to `target`, or null when there is none. */
+function nearestValue(values: readonly number[], target: number): number | null {
+  let best: number | null = null;
+  for (const value of values) {
+    if (best === null || Math.abs(value - target) < Math.abs(best - target)) {
+      best = value;
+    }
+  }
+  return best;
+}
+
+/**
+ * The range of `clip` after its `edge` is set at `atSec`: a word's start
+ * for 'start', a word's end for 'end'. The transcript panel and 말로 편집
+ * both follow this rule.
+ *
+ * Widening the clip or narrowing it inward moves that edge alone and keeps
+ * the clip at least `minSec` long. A start at or past the clip's end, or an
+ * end at or before its start, moves the whole clip with its length kept so
+ * that it starts (or ends) at `atSec`; the other edge then snaps to the
+ * nearest word edge and stays inside the Source Video.
+ */
+export function clipEdgeRange(input: {
+  clip: TimeRange;
+  edge: 'start' | 'end';
+  atSec: number;
+  words: readonly TranscriptWord[];
+  minSec: number;
+  sourceDurationSec: number;
+}): TimeRange {
+  const {clip, edge, atSec, words, minSec, sourceDurationSec} = input;
+  const length = clip.endSec - clip.startSec;
+  if (edge === 'start') {
+    if (atSec < clip.endSec) {
+      return {startSec: atSec, endSec: Math.max(clip.endSec, atSec + minSec)};
+    }
+    const ends = words
+      .map((word) => word.endSec)
+      .filter((seconds) => seconds >= atSec + minSec);
+    const endSec = nearestValue(ends, atSec + length) ?? atSec + length;
+    return {startSec: atSec, endSec: Math.min(sourceDurationSec, endSec)};
+  }
+  if (atSec > clip.startSec) {
+    return {
+      startSec: Math.max(0, Math.min(clip.startSec, atSec - minSec)),
+      endSec: atSec,
+    };
+  }
+  const starts = words
+    .map((word) => word.startSec)
+    .filter((seconds) => seconds <= atSec - minSec);
+  const startSec = nearestValue(starts, atSec - length) ?? atSec - length;
+  return {startSec: Math.max(0, startSec), endSec: atSec};
 }
 
 function currentScenario(state: EditorState): Scenario {
@@ -224,6 +285,16 @@ export function editorReducer(
       next[target] = moved;
       return withClips(state, next, target);
     }
+    case 'moveClipTo': {
+      const moved = clipAt(clips, action.index);
+      const to = Math.min(Math.max(0, Math.round(action.to)), clips.length - 1);
+      if (!moved || to === action.index) {
+        return state;
+      }
+      const rest = clips.filter((_, index) => index !== action.index);
+      const next = [...rest.slice(0, to), moved, ...rest.slice(to)];
+      return withClips(state, next, to);
+    }
     case 'splitClip': {
       const clip = clipAt(clips, action.index);
       const minSec = state.settings.minSubcutSec;
@@ -327,22 +398,13 @@ export function editorReducer(
       if (wordIndices.length === 0) {
         return state;
       }
-      const tokens = text
-        .trim()
-        .split(/\s+/)
-        .filter((token) => token.length > 0);
+      const tokens = text.split(/\s+/).filter(Boolean);
       const wordText = new Map(state.wordText);
       const cutWords = new Set(state.cutWords);
       wordIndices.forEach((wordIndex, idx) => {
         cutWords.delete(wordIndex);
-        if (tokens.length === 0) {
-          wordText.set(wordIndex, '');
-        } else if (idx < wordIndices.length - 1) {
-          wordText.set(wordIndex, tokens[idx] ?? '');
-        } else {
-          const rest = tokens.slice(idx).join(' ');
-          wordText.set(wordIndex, rest);
-        }
+        const last = idx === wordIndices.length - 1;
+        wordText.set(wordIndex, last ? tokens.slice(idx).join(' ') : (tokens[idx] ?? ''));
       });
       return {...state, wordText, cutWords};
     }
@@ -350,6 +412,23 @@ export function editorReducer(
       const cutWords = new Set(state.cutWords);
       if (!cutWords.delete(action.index)) {
         cutWords.add(action.index);
+      }
+      return {...state, cutWords};
+    }
+    case 'setWordsCut': {
+      const changes = action.wordIndices.filter(
+        (index) => state.cutWords.has(index) !== action.cut,
+      );
+      if (changes.length === 0) {
+        return state;
+      }
+      const cutWords = new Set(state.cutWords);
+      for (const index of changes) {
+        if (action.cut) {
+          cutWords.add(index);
+        } else {
+          cutWords.delete(index);
+        }
       }
       return {...state, cutWords};
     }

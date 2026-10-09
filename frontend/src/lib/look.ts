@@ -28,3 +28,10 @@ export function sameTextLayout(a: Look['textLayout'], b: Look['textLayout']): bo
     a.caption.y === b.caption.y
   );
 }
+
+/**
+ * One change to a Look, applied to the Look as it is when the change lands
+ * rather than as it was when the change started (a stage drag can outlast
+ * an Edit Request that edits the same Look).
+ */
+export type LookEdit = (look: Look) => Look;

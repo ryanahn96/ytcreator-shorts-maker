@@ -32,7 +32,7 @@ from yt.studio import models
 _CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 _MAX_CHUNK_SEC = 55.0
 _MIN_CHUNK_RATIO = 0.4
-_MAX_WORKERS = 4
+_MAX_WORKERS = 8
 _SENTENCE_ENDINGS = ('.', '?', '!', '。', '？', '！')
 
 
@@ -82,15 +82,13 @@ def plan_audio_chunks(
   """
   if duration_sec <= 0:
     return []
-  limit = _MAX_CHUNK_SEC
-  ordered_silences = sorted(silences, key=lambda item: item.start_sec)
   chunks: list[models.TimeRange] = []
   cursor = 0.0
-  while duration_sec - cursor > limit:
-    window_low = cursor + limit * _MIN_CHUNK_RATIO
-    window_high = cursor + limit
+  while duration_sec - cursor > _MAX_CHUNK_SEC:
+    window_low = cursor + _MAX_CHUNK_SEC * _MIN_CHUNK_RATIO
+    window_high = cursor + _MAX_CHUNK_SEC
     candidates: list[float] = []
-    for silence in ordered_silences:
+    for silence in silences:
       mid = (silence.start_sec + silence.end_sec) / 2.0
       if window_low <= mid <= window_high:
         candidates.append(mid)
@@ -289,7 +287,6 @@ def build_transcript_from_word_spans(
       end = min(end, next_start) if next_start > start else end
     if duration_sec > 0:
       end = min(end, duration_sec)
-    end = max(start, end)
     max_dur = _max_word_duration_sec(text)
     if end - start > max_dur:
       start = max(prev_end, floor, end - max_dur)
@@ -482,9 +479,7 @@ def transcribe_video(
   all_words: list[tuple[str, float, float]] = []
   all_line_starts: list[int] = []
   for chunk_words, chunk_starts in chunk_outputs:
-    offset = len(all_words)
-    for start_idx in chunk_starts:
-      all_line_starts.append(offset + start_idx)
+    all_line_starts.extend(len(all_words) + idx for idx in chunk_starts)
     all_words.extend(chunk_words)
   return build_transcript_from_word_spans(
       all_words, all_line_starts, duration_sec=duration_sec

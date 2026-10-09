@@ -1,7 +1,6 @@
 /**
  * The screen shown while Gemini analyzes the Source Video: an animated orb,
- * one plain status line, the elapsed time, the latest thought line and a
- * stop button.
+ * one plain status line, the elapsed time and a stop button.
  */
 
 import {useEffect, useState} from 'react';

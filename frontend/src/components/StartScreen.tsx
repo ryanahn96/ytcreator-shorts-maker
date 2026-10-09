@@ -139,24 +139,22 @@ function buildDataTunedPrompt(
       );
     }
   }
-  const lows = context.retentionLows ?? [];
-  if (lows.length > 0) {
+  if (context.retentionLows.length > 0) {
     lines.push(
       '- [시청자 이탈·저조 구간 — 제외 지시] 아래 구간은 시청자가 스킵하거나 이탈한 구간이므로 Shorts 클립에서 제외하세요:',
     );
-    for (const low of lows) {
+    for (const low of context.retentionLows) {
       const watchPct = Math.round(low.watchRatio * 100);
       lines.push(
         `  * ${formatClock(low.startSec)} ~ ${formatClock(low.endSec)} (유지율 ${watchPct}% · ${low.label})`,
       );
     }
   }
-  const comments = context.comments ?? [];
-  if (comments.length > 0) {
+  if (context.comments.length > 0) {
     lines.push(
       '- [실제 시청자 댓글 반응 반영] 시청자들이 댓글로 극찬하거나 언급한 아래 포인트와 타임스탬프를 시나리오 주제 및 상단 헤드라인 문구에 반영하세요:',
     );
-    for (const comment of comments.slice(0, 5)) {
+    for (const comment of context.comments.slice(0, 5)) {
       const cleanText = comment.text.replace(/\s+/g, ' ').slice(0, 110);
       const tsLabel =
         comment.timestampSec !== null
@@ -202,38 +200,23 @@ export function RetentionSparkline(props: {
       aria-label="YouTube 시청자 유지율 곡선"
     >
       {durationSec > 0 &&
-        peaks.map((peak, idx) => {
-          const x = Math.max(0, (peak.startSec / durationSec) * 100);
+        [
+          ...peaks.map((band) => ({band, fill: 'fill-primary/20'})),
+          ...lows.map((band) => ({band, fill: 'fill-error/15'})),
+        ].map(({band, fill}, idx) => {
+          const x = Math.max(0, (band.startSec / durationSec) * 100);
           const w = Math.max(
             1,
-            ((peak.endSec - peak.startSec) / durationSec) * 100,
+            ((band.endSec - band.startSec) / durationSec) * 100,
           );
           return (
             <rect
-              key={`peak-${idx}`}
+              key={idx}
               x={x}
               y={2}
               width={Math.min(100 - x, w)}
               height={36}
-              className="fill-primary/20"
-            />
-          );
-        })}
-      {durationSec > 0 &&
-        lows.map((low, idx) => {
-          const x = Math.max(0, (low.startSec / durationSec) * 100);
-          const w = Math.max(
-            1,
-            ((low.endSec - low.startSec) / durationSec) * 100,
-          );
-          return (
-            <rect
-              key={`low-${idx}`}
-              x={x}
-              y={2}
-              width={Math.min(100 - x, w)}
-              height={36}
-              className="fill-error/15"
+              className={fill}
             />
           );
         })}
@@ -368,10 +351,6 @@ function YouTubeChannelLinkSection(props: {
     linkedDurationSec,
     durationSec,
   );
-  const durationDiffSec =
-    durationSec > 0 && linkedDurationSec > 0
-      ? Math.abs(linkedDurationSec - durationSec)
-      : null;
 
   return (
     <details
@@ -404,7 +383,7 @@ function YouTubeChannelLinkSection(props: {
       <div className="space-y-4 px-6 pb-6">
         {durationSec > 0 && linkedDurationSec > 0 && !linkedDurationMatches && (
           <Notice tone="warning">
-            {`업로드한 파일(${formatClock(durationSec)})과 연결된 YouTube 영상(${formatClock(linkedDurationSec)})의 길이가 다릅니다 (차이 ${(durationDiffSec ?? 0).toFixed(1)}초).`}
+            {`업로드한 파일(${formatClock(durationSec)})과 연결된 YouTube 영상(${formatClock(linkedDurationSec)})의 길이가 다릅니다 (차이 ${Math.abs(linkedDurationSec - durationSec).toFixed(1)}초).`}
           </Notice>
         )}
 
@@ -460,23 +439,18 @@ function YouTubeChannelLinkSection(props: {
                   <p className="text-base font-semibold text-on-surface">
                     {context.title || `영상 ID: ${context.videoId}`}
                   </p>
-                  {context.privacyStatus && (
-                    <span className="rounded-full bg-surface-container-highest px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant">
-                      {formatPrivacyLabel(context.privacyStatus)}
-                    </span>
-                  )}
+                  <span className="rounded-full bg-surface-container-highest px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant">
+                    {formatPrivacyLabel(context.privacyStatus)}
+                  </span>
                 </div>
                 <p className="mt-1 text-xs text-on-surface-variant tabular-nums">
                   {context.publishedAt &&
                     `업로드 ${formatPublishedDate(context.publishedAt)} · `}
                   {context.durationSec > 0 &&
                     `길이 ${formatClock(context.durationSec)} · `}
-                  {typeof context.viewCount === 'number' &&
-                    `조회수 ${context.viewCount.toLocaleString()}회 · `}
-                  {typeof context.likeCount === 'number' &&
-                    `좋아요 ${context.likeCount.toLocaleString()} · `}
-                  {typeof context.commentCount === 'number' &&
-                    `댓글 ${context.commentCount.toLocaleString()}개 · `}
+                  {`조회수 ${context.viewCount.toLocaleString()}회 · `}
+                  {`좋아요 ${context.likeCount.toLocaleString()} · `}
+                  {`댓글 ${context.commentCount.toLocaleString()}개 · `}
                   {context.captionWords.length > 0
                     ? `공식 자막 (${context.captionWords.length}단어)`
                     : '공식 자막 없음'}
@@ -488,7 +462,7 @@ function YouTubeChannelLinkSection(props: {
                 icon="tune"
                 onClick={() => onTunePrompt(context)}
               >
-                ✨ 데이터로 편집 요청 튜닝
+                ✨ 데이터로 프롬프트 튜닝
               </Button>
             </div>
 
@@ -736,10 +710,10 @@ function YouTubeChannelLinkSection(props: {
                             조회수 {item.viewCount.toLocaleString()}회
                           </span>
                           <span>
-                            좋아요 {(item.likeCount ?? 0).toLocaleString()}
+                            좋아요 {item.likeCount.toLocaleString()}
                           </span>
                           <span>
-                            댓글 {(item.commentCount ?? 0).toLocaleString()}개
+                            댓글 {item.commentCount.toLocaleString()}개
                           </span>
                         </p>
                       </div>
@@ -997,7 +971,7 @@ export function StartScreen(props: {
             name="expand_more"
             className="transition-transform group-open:rotate-180"
           />
-          <span>편집 요청 바꾸기</span>
+          <span>Shorts 생성 프롬프트 바꾸기</span>
           {props.prompt.includes(TUNED_SECTION_HEADER) && (
             <span className="ms-auto rounded-full bg-secondary-container px-3 py-0.5 text-xs font-medium text-on-secondary-container">
               데이터 튜닝 적용됨

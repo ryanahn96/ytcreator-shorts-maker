@@ -15,7 +15,6 @@ import {AppHeader, CreatorBadge} from './AppHeader';
 import {EditorScreen} from './EditorScreen';
 import {ReanalyzeDialog} from './ReanalyzeDialog';
 import {StartScreen} from './StartScreen';
-import {ThemeMenu} from './ThemeMenu';
 import {Button, Dialog, Snackbar} from './ui';
 
 /** One analysis result being edited; a new result starts a new session. */
@@ -120,7 +119,6 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
     <>
       <AppHeader>
         <CreatorBadge user={config.auth.user} onLogout={props.onLogout} />
-        <ThemeMenu />
       </AppHeader>
       {analysis.state.status === 'running' ? (
         <AnalyzingScreen progress={analysis.state.progress} onCancel={analysis.cancel} />

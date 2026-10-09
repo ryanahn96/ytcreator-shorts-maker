@@ -100,15 +100,13 @@ export function useSourceUpload() {
             isSameFile(current, url) ? {status: 'ready', source, ...local} : current,
           ),
         )
-        .catch((error: unknown) => {
-          if (!abort.signal.aborted) {
-            setState((current) =>
-              isSameFile(current, url)
-                ? {status: 'failed', error: errorMessage(error), ...local}
-                : current,
-            );
-          }
-        });
+        .catch((error: unknown) =>
+          setState((current) =>
+            isSameFile(current, url)
+              ? {status: 'failed', error: errorMessage(error), ...local}
+              : current,
+          ),
+        );
     },
     [release],
   );

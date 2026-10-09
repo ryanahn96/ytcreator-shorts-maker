@@ -8,7 +8,6 @@ import {useCallback, useEffect, useState} from 'react';
 import {AppHeader} from './components/AppHeader';
 import {BrandMark, Icon} from './components/Icon';
 import {Studio} from './components/Studio';
-import {ThemeMenu} from './components/ThemeMenu';
 import {Button, buttonClass, Notice, ProgressBar} from './components/ui';
 import {errorMessage, getConfig, LOGIN_URL, logout} from './lib/api';
 import type {AuthStatus, StudioConfig} from './types';
@@ -19,16 +18,13 @@ type ConfigState =
   | {status: 'failed'; error: string};
 
 function readInitialAuthError(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  const err = params.get('auth_error');
-  if (err) {
-    params.delete('auth_error');
-    const qs = params.toString();
-    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
-    window.history.replaceState({}, '', nextUrl);
-    return err;
+  const url = new URL(window.location.href);
+  const error = url.searchParams.get('auth_error');
+  if (error) {
+    url.searchParams.delete('auth_error');
+    window.history.replaceState({}, '', url);
   }
-  return null;
+  return error || null;
 }
 
 function LoginScreen(props: {
@@ -40,9 +36,7 @@ function LoginScreen(props: {
   const canLogin = auth.oauthConfigured;
   return (
     <>
-      <AppHeader>
-        <ThemeMenu />
-      </AppHeader>
+      <AppHeader />
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center gap-6 px-4 pt-[10vh] pb-16 sm:px-6">
         {authError && (
           <Notice tone="error" onClose={props.onDismissError} className="w-full">
@@ -115,9 +109,7 @@ export default function App() {
         )
       ) : (
         <>
-          <AppHeader>
-            <ThemeMenu />
-          </AppHeader>
+          <AppHeader />
           <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center gap-4 px-4 pt-[16vh] sm:px-6">
             {state.status === 'loading' ? (
               <ProgressBar label="불러오는 중" className="w-48" />

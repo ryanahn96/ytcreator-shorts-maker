@@ -139,24 +139,19 @@
 }
 
 .material-symbols-rounded {
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
+  font-variation-settings: 'opsz' 24;
   user-select: none;
 }
 
 .material-symbols-rounded.icon-filled {
   font-variation-settings:
     'FILL' 1,
-    'wght' 400,
-    'GRAD' 0,
     'opsz' 24;
 }
 
-/* The only gradient: the "Shorts 만들기" button and analysis animations. */
-.brand-gradient {
+/* The only gradient: the "Shorts 만들기" button and analysis animations.
+   A utility, so disabled:bg-none clears it. */
+@utility brand-gradient {
   background-image: linear-gradient(
     90deg,
     #ec0032,
@@ -164,11 +159,6 @@
     #9334e6 66%,
     #0b57d0
   );
-}
-
-/* Unlayered rules beat utilities, so disabled:bg-none cannot clear it. */
-.brand-gradient:disabled {
-  background-image: none;
 }
 
 @keyframes spin-turn {
@@ -264,10 +254,6 @@
   animation: slide-indeterminate 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-.progress-indeterminate.brand-gradient {
-  background-image: none;
-}
-
 .progress-indeterminate.brand-gradient::after {
   background: linear-gradient(90deg, #ec0032, #e01378, #9334e6, #0b57d0);
 }
@@ -291,15 +277,16 @@ dialog[open] {
  * From 1024px the preview gets its own column and stays pinned under the
  * header while the clips and tabs scroll; from 1280px the tabs move to a
  * third column. --preview-w sizes the 9:16 frame so the whole preview card
- * fits under the header, ending 1rem above the bottom of the screen; the
- * editor's bottom padding is also 1rem so the pinned card is never pushed
- * under the header at the end of the page.
+ * (the frame, the transport and the 말로 편집 bar under it) fits under the
+ * header, ending 1rem above the bottom of the screen; the editor's bottom
+ * padding is also 1rem so the pinned card is never pushed under the header
+ * at the end of the page.
  */
 .editor-grid {
   --header-h: 4rem;
   --preview-w: min(
     420px,
-    max(240px, calc((100dvh - var(--header-h) - 9.5rem) * 9 / 16))
+    max(240px, calc((100dvh - var(--header-h) - 16rem) * 9 / 16))
   );
   display: grid;
   gap: 1rem;

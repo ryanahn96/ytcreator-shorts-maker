@@ -13,14 +13,13 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type Dispatch,
 } from 'react';
 
-import type {EditorAction} from '../lib/editor';
+import {clipEdgeRange, type EditorAction} from '../lib/editor';
 import type {FocusRequest} from '../lib/focus';
 import {formatClock, formatSeconds} from '../lib/format';
 import {lookTarget} from '../lib/look';
@@ -350,6 +349,8 @@ export function TranscriptPanel(props: {
   clipIndex: number;
   edits: TranscriptEdits;
   minSubcutSec: number;
+  /** Length of the Source Video; a moved clip stays inside it. */
+  sourceDurationSec: number;
   config: StudioConfig;
   scenario: Scenario;
   captionMaxChars: number;
@@ -383,11 +384,7 @@ export function TranscriptPanel(props: {
     const clipMap = new Map<number, number[]>();
     clips.forEach((resolved, position) => {
       for (const word of resolved.words) {
-        const list = clipMap.get(word.index) ?? [];
-        if (!list.includes(position)) {
-          list.push(position);
-          clipMap.set(word.index, list);
-        }
+        clipMap.set(word.index, [...(clipMap.get(word.index) ?? []), position]);
         if (position === clipIndex) {
           toneMap.set(word.index, 'selected');
         } else if (toneMap.get(word.index) !== 'selected') {
@@ -436,10 +433,7 @@ export function TranscriptPanel(props: {
     );
     if (container && lineEl) {
       container.scrollTo({
-        top: Math.max(
-          0,
-          lineEl.offsetTop - container.clientHeight / 2 + lineEl.clientHeight / 2,
-        ),
+        top: lineEl.offsetTop - container.clientHeight / 2 + lineEl.clientHeight / 2,
         behavior: 'smooth',
       });
     }
@@ -454,33 +448,28 @@ export function TranscriptPanel(props: {
     }
   }, [playbackState?.playing, playingLineIndex, userIsEditing]);
 
-  const applyClipStart = (startSec: number) => {
-    const min = props.minSubcutSec;
+  // Start and end follow the editor's clip edge rule: past the opposite
+  // end, the clip moves with its length kept (lib/editor.ts clipEdgeRange).
+  const applyClipEdge = (edge: 'start' | 'end', atSec: number) => {
     if (!selectedClip || !isSourceClip) {
       setNotice('먼저 원본 영상 클립을 고르거나 추가해 주세요.');
       return;
     }
-    const endSec = Math.max(selectedClip.endSec, startSec + min);
     dispatch({
       type: 'setClipRange',
       index: clipIndex,
-      range: {startSec, endSec},
+      range: clipEdgeRange({
+        clip: selectedClip,
+        edge,
+        atSec,
+        words: transcript.words,
+        minSec: props.minSubcutSec,
+        sourceDurationSec: props.sourceDurationSec,
+      }),
     });
   };
-
-  const applyClipEnd = (endSec: number) => {
-    const min = props.minSubcutSec;
-    if (!selectedClip || !isSourceClip) {
-      setNotice('먼저 원본 영상 클립을 고르거나 추가해 주세요.');
-      return;
-    }
-    const startSec = Math.min(selectedClip.startSec, endSec - min);
-    dispatch({
-      type: 'setClipRange',
-      index: clipIndex,
-      range: {startSec: Math.max(0, startSec), endSec},
-    });
-  };
+  const applyClipStart = (startSec: number) => applyClipEdge('start', startSec);
+  const applyClipEnd = (endSec: number) => applyClipEdge('end', endSec);
 
   const applySplitAt = (atSec: number) => {
     const min = props.minSubcutSec;
@@ -501,22 +490,16 @@ export function TranscriptPanel(props: {
     }
   };
 
-  const pick = (word: TranscriptWord) => {
+  const onPick = useCallback((word: TranscriptWord) => {
     setNotice('');
     setActiveWordIndex((prev) => (prev === word.index ? null : word.index));
-  };
-
-  const latest = useRef({pick, clips, clipIndex});
-  useLayoutEffect(() => {
-    latest.current = {pick, clips, clipIndex};
-  });
-  const onPick = useCallback((word: TranscriptWord) => latest.current.pick(word), []);
+  }, []);
 
   // Bring the selected Clip into view when the selection changes.
   const selectedId = clips[clipIndex]?.clip.clipId;
   useEffect(() => {
     const container = scrollRef.current;
-    const first = latest.current.clips[latest.current.clipIndex]?.words[0];
+    const first = clips[clipIndex]?.words[0];
     if (container && first) {
       scrollToWord(container, first.index);
     }
@@ -596,7 +579,7 @@ export function TranscriptPanel(props: {
           label="대본 표시 범위"
           value={filterScope}
           options={[
-            {value: 'all', label: `전체 대본 (${lines.length}줄)`},
+            { value: 'all', label: `전체 대본` },
             {value: 'clip', label: '현재 클립만'},
           ]}
           onChange={setFilterScope}
@@ -691,10 +674,7 @@ export function TranscriptPanel(props: {
             const lineClipIndices = Array.from(
               new Set(line.words.flatMap((w) => wordClips.get(w.index) ?? [])),
             ).sort((a, b) => a - b);
-            const activeWordInLine =
-              activeWordIndex !== null
-                ? line.words.find((w) => w.index === activeWordIndex)
-                : undefined;
+            const activeWordInLine = line.words.find((w) => w.index === activeWordIndex);
             const isEditingLine = editingLineIndex === line.index;
             const isPlayingLine = playingLineIndex === line.index;
 

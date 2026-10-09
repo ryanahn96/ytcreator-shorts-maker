@@ -19,9 +19,9 @@ _화면 표기_: 내 채널 영상 연결, 시청자 유지율, 많이 본 구�
 _Avoid_: Atom, token, event, timedtext segment
 
 **Editorial Prompt**:
-원본 영상에서 어떤 기준으로 구간을 선별하고 시나리오를 구성할지 정의하는 사용자 편집 지시문. 연결된 YouTube Video Context(많이 본 구간, 적게 본 구간, 시청자 댓글 반응)를 바탕으로 영상 맞춤형 지시문으로 튜닝할 수 있다.
-_화면 표기_: 편집 요청, 데이터 기반 프롬프트 튜닝
-_Avoid_: System template, rule config
+Analysis 때 원본 영상에서 어떤 기준으로 구간을 고르고 Scenario를 구성할지 Gemini에게 알려 주는 사용자 지시문. 연결된 YouTube Video Context(많이 본 구간, 적게 본 구간, 시청자 댓글 반응)를 바탕으로 영상 맞춤형 지시문으로 튜닝할 수 있다.
+_화면 표기_: Shorts 생성 프롬프트, 데이터로 프롬프트 튜닝
+_Avoid_: 편집 요청, System template, rule config
 
 **Analysis**:
 Source Video와 Editorial Prompt(및 연결된 YouTube Video Context)를 Gemini에 보내 Scenario들과 Transcript Word를 받아 오는 한 번의 실행. 첫 Analysis는 영상을 보고 전체 자막을 받아쓰며, 영상을 Context Cache에 올려 둔다. 다시 분석은 두 가지다: 보관한 전체 자막만으로 구간을 다시 고르는 Fast Re-analysis(기본, 몇 초)와 영상을 다시 보는 Deep Re-analysis(화면을 봐야 하는 요청용, 캐시가 살아 있으면 그것을 재사용). 다시 분석하면 새 Analysis의 결과가 이전 결과를 대신한다.
@@ -47,6 +47,11 @@ _Avoid_: Preset, template, archetype
 Shorts 시퀀스를 이루는 단일 편집 구간. 기본은 원본 영상(Source Video)에서 특정 시작 시각부터 종료 시각까지 잘라낸 구간(`source`)이며, 클립과 클립 사이에 사용자가 올린 외부 이미지(`image`, 지정한 재생 시간 동안 노출)나 외부 영상(`video`, 시작~종료 구간 트리밍 및 음소거 선택 가능)을 B-roll/중간 삽입 클립으로 넣을 수도 있다.
 _화면 표기_: 클립, 이미지 삽입, 영상 삽입
 _Avoid_: VerifiedSegment, LongformPresetSegment, DiscourseUnit, Atom
+
+**Clip Number**:
+Scenario 안에서 Clip이 놓인 순서를 1부터 센 화면 번호. 이미지·영상 삽입 클립도 함께 센다. Edit Agent의 편집 동작은 Clip을 이 번호로 가리킨다.
+_화면 표기_: 클립 1, 2번 클립
+_Avoid_: clipId, 클립 인덱스
 
 **Subcut**:
 하나의 Clip 내부에서 무음이나 불필요한 호흡을 제외하고 실제로 재생되는 발화 하위 구간. 화면에는 이름을 드러내지 않는다.
@@ -105,3 +110,13 @@ _Avoid_: Media file, attachment
 Scenario 하나를 Short Template대로 합성해 Shorts MP4 파일 하나로 만드는 일. 완성된 MP4는 파일로 내려받거나 내 YouTube 채널에 Shorts(비공개·일부 공개·공개)로 바로 업로드할 수 있다.
 _화면 표기_: MP4 만들기, YouTube Shorts로 업로드
 _Avoid_: 최종 렌더, 미리보기 렌더, export
+
+**Edit Agent**:
+편집 화면에서 사용자의 Edit Request를 알아듣고 지금 보고 있는 Scenario의 Clip 구간·순서, Look, 자막 글자를 바로 바꾸는 Gemini 기능. Analysis를 다시 하거나 Render·업로드를 하지는 않는다.
+_화면 표기_: 말로 편집
+_Avoid_: AI 편집, Edit Command, 챗봇
+
+**Edit Request**:
+사용자가 Edit Agent에게 음성이나 글로 한 번 건네는 자연어 편집 지시 한 건. 앞선 Edit Request를 이어받을 수 있다.
+_화면 표기_: 편집 요청
+_Avoid_: Edit Command, 명령, Editorial Prompt

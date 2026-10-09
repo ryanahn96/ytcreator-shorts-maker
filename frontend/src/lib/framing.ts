@@ -6,6 +6,7 @@
  * ffmpeg renders.
  */
 
+import {clamp} from './timeline';
 import type {
   CropRegion,
   FramingLayout,
@@ -29,27 +30,22 @@ function evenFloor(value: number): number {
   return Math.floor(value / 2) * 2;
 }
 
+/**
+ * Smallest width and height of a custom video box in canvas units. 말로
+ * 편집 checks the same minimum on the server (_MIN_VIDEO_BOX in
+ * yt/studio/edit_agent.py).
+ */
+export const MIN_VIDEO_BOX = 120;
+
 /** Clamps a custom VideoBoxSpec to valid even-floored canvas bounds. */
 export function clampVideoBox(
   style: TemplateStyle,
   spec: VideoBoxSpec,
 ): VideoBoxSpec {
-  const width = Math.max(
-    120,
-    Math.min(evenFloor(spec.width), evenFloor(style.canvasWidth)),
-  );
-  const height = Math.max(
-    120,
-    Math.min(evenFloor(spec.height), evenFloor(style.canvasHeight)),
-  );
-  const x = Math.max(
-    0,
-    Math.min(evenFloor(spec.x), evenFloor(style.canvasWidth - width)),
-  );
-  const y = Math.max(
-    0,
-    Math.min(evenFloor(spec.y), evenFloor(style.canvasHeight - height)),
-  );
+  const width = clamp(evenFloor(spec.width), MIN_VIDEO_BOX, evenFloor(style.canvasWidth));
+  const height = clamp(evenFloor(spec.height), MIN_VIDEO_BOX, evenFloor(style.canvasHeight));
+  const x = clamp(evenFloor(spec.x), 0, evenFloor(style.canvasWidth - width));
+  const y = clamp(evenFloor(spec.y), 0, evenFloor(style.canvasHeight - height));
   return {x, y, width, height};
 }
 
@@ -108,16 +104,10 @@ export function videoBox(
   }
   if (typeof framing !== 'string' && framing.box) {
     const custom = clampVideoBox(style, framing.box);
-    const boxWidth = Math.max(2, Math.min(evenFloor(custom.width * scale), width));
-    const boxHeight = Math.max(
-      2,
-      Math.min(evenFloor(custom.height * scale), outHeight),
-    );
-    const boxX = Math.max(0, Math.min(evenFloor(custom.x * scale), width - boxWidth));
-    const boxY = Math.max(
-      0,
-      Math.min(evenFloor(custom.y * scale), outHeight - boxHeight),
-    );
+    const boxWidth = clamp(evenFloor(custom.width * scale), 2, width);
+    const boxHeight = clamp(evenFloor(custom.height * scale), 2, outHeight);
+    const boxX = clamp(evenFloor(custom.x * scale), 0, width - boxWidth);
+    const boxY = clamp(evenFloor(custom.y * scale), 0, outHeight - boxHeight);
     return {x: boxX, y: boxY, width: boxWidth, height: boxHeight};
   }
   const boxWidth = evenFloor((style.canvasWidth - 2 * style.boxSideMargin) * scale);
@@ -161,10 +151,6 @@ export function drawFrame(input: {
   const from = cropRect(framing.crop, fitAspect(style, framing), source);
   context.fillStyle = lookStyle.backgroundColor;
   context.fillRect(0, 0, output.width, output.height);
-  context.save();
-  context.beginPath();
-  context.rect(box.x, box.y, box.width, box.height);
-  context.clip();
   context.drawImage(
     image,
     from.x,
@@ -176,7 +162,6 @@ export function drawFrame(input: {
     box.width,
     box.height,
   );
-  context.restore();
   const ring = borderWidth(lookStyle, framing, style, output.width);
   if (ring > 0) {
     context.beginPath();

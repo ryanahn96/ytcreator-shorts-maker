@@ -314,20 +314,15 @@ class Workspace:
 
   # -- Source Videos --------------------------------------------------------
 
-  def new_source(
-      self, filename: str, *, purge: bool = True
-  ) -> tuple[str, pathlib.Path]:
+  def new_source(self, filename: str) -> tuple[str, pathlib.Path]:
     """Reserves a directory for an upload.
 
     Args:
       filename: The client file name (only its suffix is used).
-      purge: Whether to purge expired local files synchronously.
 
     Returns:
       (source id, path to write the media to).
     """
-    if purge:
-      self.purge_expired()
     source_id = secrets.token_hex(_ID_BYTES)
     folder = self._sources / source_id
     folder.mkdir(parents=True)
@@ -353,10 +348,7 @@ class Workspace:
     """
     if self._bucket is None:
       return None
-    source_id = secrets.token_hex(_ID_BYTES)
-    folder = self._sources / source_id
-    folder.mkdir(parents=True, exist_ok=True)
-    media = folder / f'source{_media_suffix(filename)}'
+    source_id, media = self.new_source(filename)
     upload_url = self._bucket.create_resumable_upload(
         self._object_name(media),
         content_type,
@@ -590,18 +582,13 @@ class Workspace:
     """Reserves a working directory for a render.
 
     Returns:
-      (render id, directory where ffmpeg runs and writes output.mp4).
+      (render id, path of output.mp4 inside the directory where ffmpeg runs).
     """
     self.purge_expired()
     render_id = secrets.token_hex(_ID_BYTES)
     folder = self._renders / render_id
     folder.mkdir(parents=True)
-    return render_id, folder
-
-  @staticmethod
-  def render_output(folder: pathlib.Path) -> pathlib.Path:
-    """Returns the output path inside a render directory."""
-    return folder / _RENDER_FILE
+    return render_id, folder / _RENDER_FILE
 
   def save_render(self, render_id: str) -> None:
     """Mirrors a finished render so any instance can serve it."""

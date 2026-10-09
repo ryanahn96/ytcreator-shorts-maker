@@ -16,13 +16,14 @@ import {useMusicSync} from '../../hooks/useMusicSync';
 import type {FocusTarget, StageHit} from '../../lib/focus';
 import {fontMap, useFonts} from '../../lib/fonts';
 import {formatClock} from '../../lib/format';
+import type {LookEdit} from '../../lib/look';
 import {
   locateOutput,
   type OutputCue,
   type OutputSegment,
   type ResolvedScenario,
 } from '../../lib/timeline';
-import type {Look, Scenario, StudioConfig, TranscriptWord} from '../../types';
+import type {Scenario, StudioConfig, TranscriptWord} from '../../types';
 import {IconButton} from '../ui';
 import {CanvasPreview} from './CanvasPreview';
 import {OverlayLayer} from './OverlayLayer';
@@ -118,6 +119,15 @@ export interface SourceSeekRequest {
   sourceSec: number;
 }
 
+/**
+ * A one-off request from the editor, acted on once per seq: pause, or
+ * pause and show the Clip at `clipIndex` from its start.
+ */
+export type PreviewCommand = {seq: number} & (
+  | {kind: 'pause'}
+  | {kind: 'seekClip'; clipIndex: number}
+);
+
 export function PreviewStage(props: {
   config: StudioConfig;
   resolved: ResolvedScenario;
@@ -130,12 +140,16 @@ export function PreviewStage(props: {
   assetUrls: ReadonlyMap<string, string>;
   selectedImageId: string | null;
   seekRequest?: SourceSeekRequest | null;
+  command?: PreviewCommand | null;
   onPlaybackChange?: (state: PlaybackState) => void;
   onSelectImage: (overlayId: string | null) => void;
   /** Called during playback or transport scrubbing when the active Clip changes. */
   onSelectClip?: (clipIndex: number) => void;
-  /** A drag edited the Look shown for the Clip at `clipIndex`. */
-  onLookEdit: (clipIndex: number, look: Look) => void;
+  /**
+   * A drag edited the Look shown for the Clip `clipId` (the one on screen
+   * when the drag started); `edit` applies only what was dragged.
+   */
+  onLookEdit: (clipId: string, edit: LookEdit) => void;
   /** A click on the stage asks to edit `target` of the Clip at `clipIndex`. */
   onFocus: (clipIndex: number, target: FocusTarget) => void;
 }) {
@@ -195,18 +209,23 @@ export function PreviewStage(props: {
   }, [props.clipIndex, selectedPlan]);
 
   // While playing, automatically select the active Clip in the left panel
-  // as playback crosses Clip boundaries.
+  // as playback crosses Clip boundaries. A new editor command pauses and
+  // may select another Clip in the same commit, so it goes first.
+  const handledCommand = useRef<number | null>(null);
   useEffect(() => {
+    const command = props.command;
+    if (command && command.seq !== handledCommand.current) {
+      return;
+    }
     if (playback.playing && shownIndex >= 0 && shownIndex !== props.clipIndex) {
       latest.current.onSelectClip?.(shownIndex);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playback.playing, shownIndex, props.clipIndex]);
 
   // Report live playback playhead position (sourceSec) to the editor.
   const activeSourceSec =
-    located && (activeSegment?.mediaKind ?? 'source') === 'source'
-      ? located.sourceSec
-      : null;
+    located && activeSegment?.mediaKind === 'source' ? located.sourceSec : null;
   useEffect(() => {
     latest.current.onPlaybackChange?.({
       playing: playback.playing,
@@ -265,6 +284,39 @@ export function PreviewStage(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekSeq]);
 
+  // Editor commands. A seek waits until the pause has rendered: seekOutput
+  // keeps playing when it still sees `playing`, and an edit that rebuilds
+  // the segments pauses the sequence on its own in the same commit.
+  const [pendingSeek, setPendingSeek] = useState<{clipIndex: number} | null>(null);
+  const commandSeq = props.command?.seq;
+  useEffect(() => {
+    const command = props.command;
+    if (!command) {
+      return;
+    }
+    handledCommand.current = command.seq;
+    latest.current.playback.pause();
+    if (command.kind === 'seekClip') {
+      setPendingSeek({clipIndex: command.clipIndex});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commandSeq]);
+  useEffect(() => {
+    if (!pendingSeek || playback.playing) {
+      return;
+    }
+    const current = latest.current;
+    const planIndex = current.resolved.clips[pendingSeek.clipIndex]?.planIndex ?? null;
+    const segment =
+      planIndex === null
+        ? undefined
+        : current.resolved.segments.find((item) => item.planIndex === planIndex);
+    if (segment) {
+      current.playback.seekOutput(segment.outputStartSec);
+    }
+    setPendingSeek(null);
+  }, [pendingSeek, playback.playing]);
+
   const handleTransportSeek = (targetSec: number) => {
     playback.seekOutput(targetSec);
     const targetLocated = locateOutput(resolved.segments, targetSec);
@@ -315,6 +367,9 @@ export function PreviewStage(props: {
     }
   };
   const editedIndex = Math.max(0, shownIndex);
+  // A drag names its Clip by id: an Edit Request applied before it ends can
+  // move or delete Clips.
+  const editedClipId = resolved.clips[editedIndex]?.clip.clipId;
   // A click on the caption edits the word under the playhead; between
   // cues (the placeholder) it goes to the caption's font and colors.
   const onHit = (hit: StageHit) => {
@@ -356,12 +411,16 @@ export function PreviewStage(props: {
           style={style}
           fonts={fonts}
           look={look}
-          caption={cue ? cue.words.map((word) => word.text).join(' ') : ''}
+          caption={cue?.text ?? ''}
           assetUrls={props.assetUrls}
           showPlaceholders={!playback.playing}
           selectedImageId={props.selectedImageId}
           onSelectImage={props.onSelectImage}
-          onLook={(next) => props.onLookEdit(editedIndex, next)}
+          onLook={(edit) => {
+            if (editedClipId !== undefined) {
+              props.onLookEdit(editedClipId, edit);
+            }
+          }}
           onHit={onHit}
         />
       </CanvasPreview>

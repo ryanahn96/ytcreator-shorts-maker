@@ -66,11 +66,11 @@ export interface OutputSegment extends TimeRange {
   muteAudio: boolean;
 }
 
-/** A caption on the output timeline, with each word's output start. */
+/** A caption on the output timeline. */
 export interface OutputCue {
   startSec: number;
   endSec: number;
-  words: {text: string; startSec: number}[];
+  text: string;
 }
 
 export interface ResolvedScenario {
@@ -79,6 +79,16 @@ export interface ResolvedScenario {
   segments: OutputSegment[];
   cues: OutputCue[];
   durationSec: number;
+}
+
+/** `seconds` rounded to whole milliseconds. */
+export function roundMs(seconds: number): number {
+  return Math.round(seconds * 1000) / 1000;
+}
+
+/** `value` limited to `low`..`high` (`high` wins when they cross). */
+export function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), high);
 }
 
 export function totalSec(ranges: readonly TimeRange[]): number {
@@ -315,13 +325,11 @@ function outputCues(
     if (!clipSegments) {
       continue;
     }
-    const words = cue.words.map((word) => ({
-      text: word.text,
-      startSec: toOutput(word.startSec, clipSegments),
-    }));
+    const startSec = toOutput(cue.words[0].startSec, clipSegments);
     const endSec = toOutput(cue.words[cue.words.length - 1].endSec, clipSegments);
-    if (endSec - words[0].startSec >= minCueSec) {
-      cues.push({startSec: words[0].startSec, endSec, words});
+    if (endSec - startSec >= minCueSec) {
+      const text = cue.words.map((word) => word.text).join(' ');
+      cues.push({startSec, endSec, text});
     }
   }
   cues.sort((a, b) => a.startSec - b.startSec);

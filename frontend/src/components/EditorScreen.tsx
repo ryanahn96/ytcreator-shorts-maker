@@ -1,9 +1,11 @@
 /**
  * The editor of one analysis. The header holds the Shorts tabs, the cost
- * and time of the analysis and the actions; the body has the clips on the
- * left, the pinned preview in the middle and the 자막 · 스타일 · 소리 tabs
- * on the right (layout in index.css). Every edit resolves on the client
- * (lib/timeline.ts) and feeds the preview and the MP4 render at once.
+ * and time of the analysis and the actions, with undo and redo; the body
+ * has the clips on the left, the pinned preview with 말로 편집 (Edit Agent)
+ * under it in the middle and the 자막 · 스타일 · 소리 tabs on the right
+ * (layout in index.css). Every edit, by hand or by Edit Request, resolves
+ * on the client (lib/timeline.ts) and feeds the preview and the MP4 render
+ * at once; lib/history.ts keeps the undo steps.
  */
 
 import {
@@ -11,7 +13,6 @@ import {
   useEffect,
   useId,
   useMemo,
-  useReducer,
   useRef,
   useState,
   type Dispatch,
@@ -21,11 +22,13 @@ import {
 
 import type {AnalysisState} from '../hooks/useAnalysis';
 import type {AssetStore} from '../hooks/useAssets';
-import {errorMessage, renderPlan} from '../lib/api';
-import {createEditorState, editorReducer, type EditorAction} from '../lib/editor';
+import {editShorts, errorMessage, renderPlan} from '../lib/api';
+import {applyEditReply, buildEditRequest, type AppliedEdit} from '../lib/editAgent';
+import {createEditorState, type EditorAction} from '../lib/editor';
 import {tabOf, type FocusRequest, type FocusTarget} from '../lib/focus';
 import {formatClock, formatCost, formatDuration} from '../lib/format';
-import {lookTarget} from '../lib/look';
+import {useEditorHistory} from '../lib/history';
+import {effectiveLook, lookTarget, type LookEdit} from '../lib/look';
 import {
   clipSubcuts,
   resolveScenario,
@@ -37,7 +40,6 @@ import {
 import type {
   AnalysisReport,
   AnalysisResult,
-  Look,
   RenderQuality,
   Scenario,
   StudioConfig,
@@ -50,12 +52,14 @@ import type {
 import {statusLine} from './AnalyzingScreen';
 import {Brand, CreatorBadge} from './AppHeader';
 import {ClipEditor} from './ClipEditor';
+import {EditAgentBar, type EditAgentEntry} from './EditAgentBar';
 import {ExportDialog, type RenderJob} from './ExportDialog';
 import {Icon, type IconName} from './Icon';
 import {LookControls} from './LookControls';
 import {
   PreviewStage,
   type PlaybackState,
+  type PreviewCommand,
   type SourceSeekRequest,
 } from './preview/PreviewStage';
 import {ScenarioAudioControls} from './ScenarioAudioControls';
@@ -98,6 +102,8 @@ function onTabListKey(
   const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
   tabs?.[next]?.focus();
 }
+
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 /**
  * A horizontal strip of the Scenarios Gemini proposed, placed above the
@@ -302,18 +308,13 @@ function YouTubeInsightsPanel(props: {
     );
   }
 
-  const addSpanAsClip = (startSec: number, endSec: number) => {
-    const safeStart = Math.max(0, startSec);
-    const safeEnd = Math.min(
-      sourceDurationSec > 0 ? sourceDurationSec : endSec,
-      Math.max(safeStart + 2, endSec),
-    );
+  // The addClip reducer fits the range into the Source Video.
+  const addSpanAsClip = (startSec: number, endSec: number) =>
     dispatch({
       type: 'addClip',
-      range: {startSec: safeStart, endSec: safeEnd},
+      range: {startSec, endSec: Math.max(startSec + 2, endSec)},
       afterIndex: clipIndex,
     });
-  };
 
   return (
     <div className="space-y-4">
@@ -604,6 +605,9 @@ function ToolTabs(props: {
   );
 }
 
+/** A PreviewCommand before it gets its sequence number. */
+type PreviewCommandInput = {kind: 'pause'} | {kind: 'seekClip'; clipIndex: number};
+
 export function EditorScreen(props: {
   config: StudioConfig;
   result: AnalysisResult;
@@ -619,9 +623,10 @@ export function EditorScreen(props: {
   onLogout: () => void;
 }) {
   const {config, result, source, assets} = props;
-  const [state, dispatch] = useReducer(editorReducer, undefined, () =>
+  const {history, dispatch, latest, commit, undo, redo} = useEditorHistory(() =>
     createEditorState(result, config.composition),
   );
+  const state = history.present;
   // An image stays selected only in the Clip where it was picked.
   const [imageSelection, setImageSelection] = useState<{
     scope: string;
@@ -637,14 +642,48 @@ export function EditorScreen(props: {
   const [seekRequest, setSeekRequest] = useState<SourceSeekRequest | null>(
     null,
   );
+  const [previewCommand, setPreviewCommand] = useState<PreviewCommand | null>(null);
   const [warningsOpen, setWarningsOpen] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
   const [renderQuality, setRenderQuality] = useState<RenderQuality>('1440p');
   const [jobs, setJobs] = useState<Readonly<Record<string, RenderJob>>>({});
+  // 말로 편집: the requests of this editor session, and the one waiting.
+  const [agentEntries, setAgentEntries] = useState<readonly EditAgentEntry[]>([]);
+  const agentRequest = useRef<{entryId: number; controller: AbortController} | null>(
+    null,
+  );
+  const nextEntryId = useRef(1);
 
   const handleSeekSource = useCallback((sourceSec: number) => {
     setSeekRequest((prev) => ({seq: (prev?.seq ?? 0) + 1, sourceSec}));
   }, []);
+
+  useEffect(() => {
+    // Ctrl+Z (⌘Z on a Mac) undoes, and with Shift redoes. Text boxes keep
+    // their own undo, and an open dialog keeps the keys.
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const modifier = IS_MAC
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      if (
+        event.code === 'KeyZ' &&
+        modifier &&
+        !event.altKey &&
+        !event.isComposing &&
+        !event.defaultPrevented &&
+        !(event.target instanceof Element && event.target.matches(':read-write')) &&
+        !document.querySelector('dialog[open]')
+      ) {
+        event.preventDefault();
+        (event.shiftKey ? redo : undo)();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  // A request still waiting when the editor goes away is dropped.
+  useEffect(() => () => agentRequest.current?.controller.abort(), []);
 
   const transcript = useMemo<Transcript>(
     () => ({
@@ -718,12 +757,24 @@ export function EditorScreen(props: {
     );
   };
 
-  const onLookEdit = (index: number, look: Look) => {
-    if (!scenario) {
+  // A stage drag lands on the newest state: an Edit Request applied while
+  // the pointer was down keeps its changes, and the Clip is found by id.
+  // The drag selects that Clip and sets the Look its edits go to; nothing
+  // happens when the Shorts on screen no longer has the Clip or the edit
+  // changes nothing.
+  const onLookEdit = (clipId: string, edit: LookEdit) => {
+    const newest = latest();
+    const shorts: Scenario | undefined = newest.scenarios[newest.scenarioIndex];
+    const index = shorts ? shorts.clips.findIndex((clip) => clip.clipId === clipId) : -1;
+    if (!shorts || index < 0) {
       return;
     }
-    dispatch({type: 'selectClip', index});
-    dispatch({type: 'setLook', clipId: lookTarget(scenario, index), look});
+    const look = effectiveLook(shorts, shorts.clips[index]);
+    const next = edit(look);
+    if (next !== look) {
+      dispatch({type: 'selectClip', index});
+      dispatch({type: 'setLook', clipId: lookTarget(shorts, index), look: next});
+    }
   };
 
   const requestFocus = (target: FocusTarget) => {
@@ -742,6 +793,118 @@ export function EditorScreen(props: {
       });
     }
     requestFocus(target);
+  };
+
+  const commandPreview = (command: PreviewCommandInput) =>
+    setPreviewCommand((current) => ({...command, seq: (current?.seq ?? 0) + 1}));
+
+  const updateEntry = (entryId: number, patch: Partial<EditAgentEntry>) =>
+    setAgentEntries((entries) =>
+      entries.map((entry) => (entry.id === entryId ? {...entry, ...patch} : entry)),
+    );
+
+  /**
+   * Sends an Edit Request from the newest state. Hand edits go on while it
+   * waits; the answer applies to the state of the moment it arrives, as one
+   * undo step. Returns false when another request is still waiting.
+   */
+  const sendEdit = (text: string, retryId?: number): boolean => {
+    if (agentRequest.current) {
+      return false;
+    }
+    const current = latest();
+    const {body, sent} = buildEditRequest({
+      text,
+      state: current,
+      sourceId: source.sourceId,
+      playheadSec: playbackState.sourceSec,
+      assets: assets.records,
+      turns: agentEntries.filter((entry) => entry.status === 'done'),
+      reverted: history.reverted,
+    });
+    const context = {config, words: transcript.words, assets: assets.records};
+    const controller = new AbortController();
+    const entryId = retryId ?? nextEntryId.current++;
+    agentRequest.current = {entryId, controller};
+    const entry: EditAgentEntry = {
+      id: entryId,
+      status: 'pending',
+      request: text,
+      reply: '',
+      operations: [],
+      stepId: null,
+      notes: [],
+      error: '',
+    };
+    setAgentEntries((entries) =>
+      retryId === undefined
+        ? [...entries, entry]
+        : entries.map((item) => (item.id === retryId ? entry : item)),
+    );
+    // Only the answer to the request still waiting counts; one that was
+    // stopped or replaced is dropped.
+    const isCurrent = () => agentRequest.current?.controller === controller;
+    editShorts(body, controller.signal).then(
+      (response) => {
+        if (!isCurrent()) {
+          return;
+        }
+        agentRequest.current = null;
+        let applied: AppliedEdit;
+        try {
+          applied = applyEditReply(latest(), sent, response, context);
+        } catch (error) {
+          updateEntry(entryId, {
+            status: 'failed',
+            error: `답을 적용하지 못했어요: ${errorMessage(error)}`,
+          });
+          return;
+        }
+        let stepId: number | null = null;
+        if (applied.changed) {
+          // The step starts in the Shorts it edits, so undo shows it there.
+          if (applied.state.scenarioIndex !== latest().scenarioIndex) {
+            dispatch({type: 'selectScenario', index: applied.state.scenarioIndex});
+          }
+          stepId = commit(applied.state);
+          if (applied.focusClipIndex !== null) {
+            commandPreview({kind: 'seekClip', clipIndex: applied.focusClipIndex});
+          }
+        }
+        updateEntry(entryId, {
+          status: 'done',
+          reply: applied.reply,
+          operations: response.operations,
+          notes: [...response.notes, ...applied.notes],
+          stepId,
+        });
+      },
+      (error: unknown) => {
+        if (!isCurrent()) {
+          return;
+        }
+        agentRequest.current = null;
+        updateEntry(entryId, {status: 'failed', error: errorMessage(error)});
+      },
+    );
+    return true;
+  };
+
+  const stopEdit = () => {
+    const waiting = agentRequest.current;
+    if (!waiting) {
+      return;
+    }
+    agentRequest.current = null;
+    waiting.controller.abort();
+    updateEntry(waiting.entryId, {status: 'stopped'});
+  };
+
+  const retryEdit = (entryId: number) => {
+    const entry = agentEntries.find((item) => item.id === entryId);
+    if (entry) {
+      sendEdit(entry.request, entryId);
+    }
   };
 
   const runningText = running ? statusLine(running.stage) : '';
@@ -769,6 +932,18 @@ export function EditorScreen(props: {
             ) : (
               <CostChip report={result.analysis} />
             )}
+            <IconButton
+              label="실행 취소"
+              icon="undo"
+              disabled={history.done.length === 0}
+              onClick={undo}
+            />
+            <IconButton
+              label="다시 실행"
+              icon="redo"
+              disabled={history.undone.length === 0}
+              onClick={redo}
+            />
             <HeaderAction
               label="다시 분석"
               icon="refresh"
@@ -841,11 +1016,22 @@ export function EditorScreen(props: {
                   assetUrls={assets.urls}
                   selectedImageId={selectedImageId}
                   seekRequest={seekRequest}
+                  command={previewCommand}
                   onPlaybackChange={setPlaybackState}
                   onSelectClip={(index) => dispatch({type: 'selectClip', index})}
                   onSelectImage={selectImage}
                   onLookEdit={onLookEdit}
                   onFocus={onStageFocus}
+                />
+                <EditAgentBar
+                  entries={agentEntries}
+                  lastStepId={history.done.at(-1)?.id ?? null}
+                  reverted={history.reverted}
+                  onSend={(text) => sendEdit(text)}
+                  onStop={stopEdit}
+                  onRetry={retryEdit}
+                  onUndo={undo}
+                  onListen={() => commandPreview({kind: 'pause'})}
                 />
               </Card>
             </div>
@@ -861,6 +1047,7 @@ export function EditorScreen(props: {
                       clipIndex={state.clipIndex}
                       edits={edits}
                       minSubcutSec={state.settings.minSubcutSec}
+                      sourceDurationSec={state.sourceDurationSec}
                       config={config}
                       scenario={scenario}
                       captionMaxChars={state.settings.captionMaxChars}
@@ -911,7 +1098,7 @@ export function EditorScreen(props: {
           </>
         ) : (
           <p className="mx-auto mt-[12vh] max-w-xl text-center text-lg text-on-surface-variant">
-            Shorts가 없어요. 편집 요청을 바꿔 다시 분석해 보세요.
+            Shorts가 없어요. Shorts 생성 프롬프트를 바꿔 다시 분석해 보세요.
           </p>
         )}
       </main>

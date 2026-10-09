@@ -53,10 +53,6 @@ class YouTubeError(RuntimeError):
   """Raised when an OAuth or YouTube API request fails."""
 
 
-class AuthRequiredError(YouTubeError):
-  """Raised when an operation requires a signed-in creator session."""
-
-
 def _http_client(timeout_sec: float = 60.0) -> httpx.Client:
   return httpx.Client(timeout=httpx.Timeout(timeout_sec, connect=15.0))
 
@@ -118,47 +114,32 @@ def _fetch_creator_profile(
 ) -> models.CreatorProfile:
   """Fetches the signed-in user's Google info and YouTube channel metadata."""
   headers = _auth_headers(access_token)
-  email = ''
-  name = ''
-  picture = ''
   info_resp = client.get(_USERINFO_ENDPOINT, headers=headers)
-  if info_resp.status_code == 200:
-    info = info_resp.json()
-    if isinstance(info, dict):
-      email = str(info.get('email') or '').strip()
-      name = str(info.get('name') or '').strip()
-      picture = str(info.get('picture') or '').strip()
-
-  channel_title = ''
-  channel_handle = ''
-  channel_thumb = ''
+  info = _as_dict(info_resp.json()) if info_resp.status_code == 200 else {}
   ch_resp = client.get(
       f'{_YOUTUBE_API}/channels',
       params={'part': 'snippet', 'mine': 'true'},
       headers=headers,
   )
-  if ch_resp.status_code == 200:
-    ch_data = ch_resp.json()
-    items = ch_data.get('items') if isinstance(ch_data, dict) else None
-    if isinstance(items, list) and items and isinstance(items[0], dict):
-      snippet = items[0].get('snippet')
-      if isinstance(snippet, dict):
-        channel_title = str(snippet.get('title') or '').strip()
-        channel_handle = str(snippet.get('customUrl') or '').strip()
-        thumbs = snippet.get('thumbnails')
-        if isinstance(thumbs, dict):
-          for key in ('default', 'medium', 'high'):
-            entry = thumbs.get(key)
-            if isinstance(entry, dict) and entry.get('url'):
-              channel_thumb = str(entry['url']).strip()
-              break
-
+  ch_data = _as_dict(ch_resp.json()) if ch_resp.status_code == 200 else {}
+  items = ch_data.get('items')
+  first = items[0] if isinstance(items, list) and items else None
+  snippet = _as_dict(_as_dict(first).get('snippet'))
+  thumbs = _as_dict(snippet.get('thumbnails'))
+  channel_thumb = ''
+  for key in ('default', 'medium', 'high'):
+    entry = thumbs.get(key)
+    if isinstance(entry, dict) and entry.get('url'):
+      channel_thumb = str(entry['url']).strip()
+      break
+  email = str(info.get('email') or '').strip()
+  channel_title = str(snippet.get('title') or '').strip()
   return models.CreatorProfile(
       email=email,
-      name=name or channel_title or email,
-      picture_url=channel_thumb or picture,
+      name=str(info.get('name') or '').strip() or channel_title or email,
+      picture_url=channel_thumb or str(info.get('picture') or '').strip(),
       channel_title=channel_title,
-      channel_handle=channel_handle,
+      channel_handle=str(snippet.get('customUrl') or '').strip(),
   )
 
 
@@ -227,11 +208,11 @@ def ensure_fresh_session(
           },
       )
     except httpx.HTTPError as exc:
-      raise AuthRequiredError(
+      raise YouTubeError(
           f'OAuth 토큰 갱신에 실패했습니다. 다시 로그인하세요: {exc}'
       ) from exc
   if response.status_code != 200:
-    raise AuthRequiredError(
+    raise YouTubeError(
         _api_error_message(
             response, 'OAuth 세션이 만료되었습니다. 다시 로그인하세요'
         )
@@ -239,7 +220,7 @@ def ensure_fresh_session(
   data = response.json()
   access_token = str(data.get('access_token') or '').strip()
   if not access_token:
-    raise AuthRequiredError('갱신된 access_token이 없습니다. 다시 로그인하세요.')
+    raise YouTubeError('갱신된 access_token이 없습니다. 다시 로그인하세요.')
   expires_in = float(data.get('expires_in') or 3600.0)
   refreshed = models.OAuthSession(
       session_id=session.session_id,
@@ -305,8 +286,6 @@ def parse_srt_captions(text: str) -> ingestion.Transcript:
   lines: list[ingestion.CaptionLine] = []
   for block in blocks:
     rows = [row.strip() for row in block.splitlines() if row.strip()]
-    if not rows or rows[0].startswith('WEBVTT'):
-      continue
     arrow_idx = next(
         (idx for idx, row in enumerate(rows) if '-->' in row), -1
     )
@@ -331,18 +310,14 @@ def parse_srt_captions(text: str) -> ingestion.Transcript:
 _COMMENT_TIME_RE = re.compile(r'(?<!\d)(\d{1,2}:\d{2}(?::\d{2})?)(?!\d)')
 
 
-def _has_shorts_tag(
-    title: str, description: str, tags: Sequence[str] = ()
-) -> bool:
+def _has_shorts_tag(title: str, description: str, tags: Sequence[str]) -> bool:
   """Returns True when title, description, or tags contain #shorts/#쇼츠."""
   haystack = f'{title}\n{description}'.lower()
   if '#shorts' in haystack or '#쇼츠' in haystack:
     return True
-  for tag in tags:
-    cleaned = str(tag).strip().lower().lstrip('#')
-    if cleaned in ('shorts', '쇼츠'):
-      return True
-  return False
+  return any(
+      str(tag).strip().lower().lstrip('#') in ('shorts', '쇼츠') for tag in tags
+  )
 
 
 def _pick_thumbnail_url(thumbs: dict[str, object]) -> str:
@@ -496,11 +471,7 @@ def list_channel_videos(access_token: str) -> models.YouTubeVideoList:
           continue
         video = _video_item(raw)
         raw_tags = _as_dict(raw.get('snippet')).get('tags')
-        tags = (
-            [str(tag) for tag in raw_tags]
-            if isinstance(raw_tags, list)
-            else []
-        )
+        tags = raw_tags if isinstance(raw_tags, list) else []
         if not _has_shorts_tag(video.title, video.description, tags):
           videos.append(video)
     videos.sort(key=lambda item: item.published_at, reverse=True)
@@ -643,9 +614,7 @@ def _extract_comment_timestamp(
   """Extracts the first MM:SS or HH:MM:SS timestamp mentioned in a comment."""
   for match in _COMMENT_TIME_RE.finditer(text):
     sec = _parse_clock_timestamp(match.group(1))
-    if sec is None or sec < 0:
-      continue
-    if duration_sec <= 0 or sec <= duration_sec:
+    if sec is not None and (duration_sec <= 0 or sec <= duration_sec):
       return round(sec, 1)
   return None
 
@@ -674,19 +643,11 @@ def _fetch_video_comments(
   if not isinstance(items, list):
     return []
   comments: list[models.YouTubeComment] = []
-  for item in items:
-    if not isinstance(item, dict):
-      continue
-    thread_snippet = item.get('snippet') or {}
-    if not isinstance(thread_snippet, dict):
-      continue
-    top_comment = thread_snippet.get('topLevelComment') or {}
-    if not isinstance(top_comment, dict):
-      continue
+  for raw in items:
+    item = _as_dict(raw)
+    top_comment = _as_dict(_as_dict(item.get('snippet')).get('topLevelComment'))
     cid = str(top_comment.get('id') or item.get('id') or '').strip()
-    c_snippet = top_comment.get('snippet') or {}
-    if not isinstance(c_snippet, dict):
-      continue
+    c_snippet = _as_dict(top_comment.get('snippet'))
     text = str(
         c_snippet.get('textDisplay') or c_snippet.get('textOriginal') or ''
     ).strip()

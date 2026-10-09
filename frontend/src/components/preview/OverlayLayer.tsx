@@ -5,15 +5,18 @@
  * and the Image Overlays (as ffmpeg composites them).
  * Text blocks and images can be dragged here; images also get resize and
  * rotate handles when selected. Drags stay local until the pointer is
- * released, then commit the edited Look once. A press that does not move
- * is a click, which reports what was hit so the editor can focus it.
+ * released, then commit what was dragged once, as an edit of the Look as it
+ * is by then, so a change that landed during the drag (an Edit Request's
+ * answer) stays. A press that does not move is a click, which reports what
+ * was hit so the editor can focus it.
  */
 
 import {Fragment, useRef, useState, type CSSProperties, type PointerEvent} from 'react';
 
 import {type StageHit} from '../../lib/focus';
 import {cssFontSize, fontStack, rgba} from '../../lib/fonts';
-import {clampVideoBox, videoBox} from '../../lib/framing';
+import {clampVideoBox, MIN_VIDEO_BOX, videoBox} from '../../lib/framing';
+import {type LookEdit} from '../../lib/look';
 import type {
   FontEntry,
   ImageOverlay,
@@ -88,7 +91,11 @@ export function OverlayLayer(props: {
   showPlaceholders: boolean;
   selectedImageId: string | null;
   onSelectImage: (overlayId: string | null) => void;
-  onLook: (look: Look) => void;
+  /**
+   * A drag ended: `edit` applies only what was dragged, to the Look of the
+   * Clip that was on screen when the drag started.
+   */
+  onLook: (edit: LookEdit) => void;
   /** A click (not a drag) landed on this element. */
   onHit: (hit: StageHit) => void;
 }) {
@@ -116,11 +123,11 @@ export function OverlayLayer(props: {
   };
 
   // Tracks a press: a move past CLICK_UNITS drags (drafts on every move,
-  // commits on release); a release before that is a click.
-  const drag = (
+  // commits the last draft on release); a release before that is a click.
+  const drag = <T extends Draft>(
     event: PointerEvent<HTMLElement>,
-    move: (from: Point, to: Point) => Draft,
-    commit: (value: Draft) => void,
+    move: (from: Point, to: Point) => T,
+    commit: (value: T) => void,
     click: () => void,
   ) => {
     if (event.button !== 0) {
@@ -131,7 +138,7 @@ export function OverlayLayer(props: {
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
     const from = toCanvas(event.clientX, event.clientY);
-    let last: Draft | null = null;
+    let last: T | null = null;
     const onMove = (moveEvent: globalThis.PointerEvent) => {
       const to = toCanvas(moveEvent.clientX, moveEvent.clientY);
       if (last === null && Math.hypot(to.x - from.x, to.y - from.y) < CLICK_UNITS) {
@@ -158,24 +165,6 @@ export function OverlayLayer(props: {
     target.addEventListener('pointercancel', onCancel);
   };
 
-  const commitDraft = (value: Draft) => {
-    if ('textLayout' in value) {
-      props.onLook({...look, textLayout: value.textLayout});
-    } else if ('box' in value) {
-      props.onLook({
-        ...look,
-        framingLayout: {...look.framingLayout, fit: 'box', box: value.box},
-      });
-    } else {
-      props.onLook({
-        ...look,
-        images: look.images.map((item) =>
-          item.overlayId === value.image.overlayId ? value.image : item,
-        ),
-      });
-    }
-  };
-
   const dragVideoBox = (
     event: PointerEvent<HTMLElement>,
     handle: BoxHandle,
@@ -187,7 +176,7 @@ export function OverlayLayer(props: {
     const bottom = startBox.y + startBox.height;
     drag(
       event,
-      (from, to) => {
+      (from, to): {box: VideoBoxSpec} => {
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         if (handle === 'move') {
@@ -207,19 +196,19 @@ export function OverlayLayer(props: {
         }
         const nextLeft =
           handle === 'nw' || handle === 'sw'
-            ? Math.max(0, Math.min(right - 120, startBox.x + dx))
+            ? Math.max(0, Math.min(right - MIN_VIDEO_BOX, startBox.x + dx))
             : startBox.x;
         const nextRight =
           handle === 'ne' || handle === 'se'
-            ? Math.min(style.canvasWidth, Math.max(startBox.x + 120, right + dx))
+            ? Math.min(style.canvasWidth, Math.max(startBox.x + MIN_VIDEO_BOX, right + dx))
             : right;
         const nextTop =
           handle === 'nw' || handle === 'ne'
-            ? Math.max(0, Math.min(bottom - 120, startBox.y + dy))
+            ? Math.max(0, Math.min(bottom - MIN_VIDEO_BOX, startBox.y + dy))
             : startBox.y;
         const nextBottom =
           handle === 'sw' || handle === 'se'
-            ? Math.min(style.canvasHeight, Math.max(startBox.y + 120, bottom + dy))
+            ? Math.min(style.canvasHeight, Math.max(startBox.y + MIN_VIDEO_BOX, bottom + dy))
             : bottom;
         return {
           box: clampVideoBox(style, {
@@ -230,7 +219,11 @@ export function OverlayLayer(props: {
           }),
         };
       },
-      commitDraft,
+      ({box}) =>
+        props.onLook((current) => ({
+          ...current,
+          framingLayout: {...current.framingLayout, fit: 'box', box},
+        })),
       () => props.onHit({kind: 'videoBox'}),
     );
   };
@@ -244,7 +237,7 @@ export function OverlayLayer(props: {
     const center = style.canvasWidth / 2;
     drag(
       event,
-      (from, to) => {
+      (from, to): {textLayout: TextLayout} => {
         let x = start.x + to.x - from.x;
         if (Math.abs(x - center) < SNAP_UNITS) {
           x = center;
@@ -255,7 +248,11 @@ export function OverlayLayer(props: {
         };
         return {textLayout: {...look.textLayout, [key]: placement}};
       },
-      commitDraft,
+      ({textLayout: moved}) =>
+        props.onLook((current) => ({
+          ...current,
+          textLayout: {...current.textLayout, [key]: moved[key]},
+        })),
       click,
     );
   };
@@ -269,7 +266,7 @@ export function OverlayLayer(props: {
     const center = {x: start.x, y: start.y};
     drag(
       event,
-      (from, to) => {
+      (from, to): {image: ImageOverlay} => {
         if (mode === 'move') {
           return {
             image: {
@@ -298,7 +295,26 @@ export function OverlayLayer(props: {
           image: {...start, rotationDeg: normalizeDegrees(start.rotationDeg + (turn * 180) / Math.PI)},
         };
       },
-      commitDraft,
+      // Only the dragged fields: the rest of the image may have changed, and
+      // nothing changes once the image is gone.
+      ({image}) => {
+        const fields =
+          mode === 'move'
+            ? {x: image.x, y: image.y}
+            : mode === 'resize'
+              ? {width: image.width, height: image.height}
+              : {rotationDeg: image.rotationDeg};
+        props.onLook((current) =>
+          current.images.some((item) => item.overlayId === image.overlayId)
+            ? {
+                ...current,
+                images: current.images.map((item) =>
+                  item.overlayId === image.overlayId ? {...item, ...fields} : item,
+                ),
+              }
+            : current,
+        );
+      },
       () => props.onHit({kind: 'image', overlayId: start.overlayId}),
     );
   };

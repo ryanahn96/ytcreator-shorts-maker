@@ -117,7 +117,7 @@ def sound_tag_flags(tokens: Sequence[str]) -> list[bool]:
   return flags
 
 
-def _finish(lines: Sequence[CaptionLine]) -> Transcript:
+def transcript_from_lines(lines: Sequence[CaptionLine]) -> Transcript:
   """Turns caption lines into Transcript Words with monotonic timing.
 
   Words inside a line get start times spread by character position, and no
@@ -125,6 +125,7 @@ def _finish(lines: Sequence[CaptionLine]) -> Transcript:
   starts. The last word of a line also stops at the line end when that end
   lies after its start, which exposes the pauses between caption lines.
   """
+  lines = _normalize_caption_lines(lines)
   texts: list[str] = []
   starts: list[float] = []
   limits: list[float] = []
@@ -184,12 +185,6 @@ def _normalize_caption_lines(
     if end > start:
       normalized.append(CaptionLine(start=start, end=end, text=line.text))
   return normalized
-
-
-def transcript_from_lines(lines: Sequence[CaptionLine]) -> Transcript:
-  """Builds Transcript Words from lines, interpolating word timing."""
-  return _finish(_normalize_caption_lines(lines))
-
 
 
 # --------------------------------------------------------------------------
@@ -382,7 +377,7 @@ def make_analysis_proxy(path: str, output: pathlib.Path) -> int:
       '-c:v',
       'libx264',
       '-preset',
-      'veryfast',
+      'ultrafast',
       '-crf',
       '32',
       '-pix_fmt',
@@ -404,24 +399,6 @@ def make_analysis_proxy(path: str, output: pathlib.Path) -> int:
     )
   partial.replace(output)
   return output.stat().st_size
-
-
-def source_video_from_upload(
-    source: models.UploadedSource,
-) -> models.SourceVideo:
-  """Builds the Source Video model of a file the user uploaded.
-
-  Args:
-    source: The probed upload.
-
-  Returns:
-    The Source Video, titled with the file name without its extension.
-  """
-  return models.SourceVideo(
-      title=pathlib.PurePath(source.filename).stem,
-      duration_sec=source.media.duration_sec,
-      fps=source.media.fps,
-  )
 
 
 def probe_asset(

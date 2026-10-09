@@ -228,12 +228,12 @@ export interface YouTubeComment {
 export interface YouTubeVideoContext {
   videoId: string;
   title: string;
-  publishedAt?: string;
+  publishedAt: string;
   durationSec: number;
-  viewCount?: number;
-  likeCount?: number;
-  commentCount?: number;
-  privacyStatus?: string;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  privacyStatus: string;
   retentionPoints: YouTubeRetentionPoint[];
   retentionPeaks: YouTubeRetentionPeak[];
   retentionLows: YouTubeRetentionPeak[];
@@ -494,3 +494,141 @@ export interface StudioConfig {
   /** Google / YouTube OAuth sign-in state and creator channel profile. */
   auth: AuthStatus;
 }
+
+/*
+ * 말로 편집 (Edit Agent): POST /edit. Mirrors yt/studio/edit_agent.py.
+ * Clips are named by Clip Number, counted from 1 as on screen when the
+ * Edit Request was sent.
+ */
+
+/** An earlier Edit Request of this editor session. */
+export interface EditTurnPayload {
+  request: string;
+  reply: string;
+  operations: EditOperation[];
+  /** Whether the user undid the edits of this turn. */
+  undone: boolean;
+}
+
+/** One Edit Request and the state it was sent from. */
+export interface EditRequest {
+  /** The Source Video; the server adds its stored transcript and audience data. */
+  sourceId: string;
+  request: string;
+  /** The Shorts on screen. */
+  scenario: Scenario;
+  shortsNumber: number;
+  shortsCount: number;
+  /** Clip Number of the selected Clip; null when there is none. */
+  clipNumber: number | null;
+  /** Source Video second under the playhead; null over an inserted clip. */
+  playheadSec: number | null;
+  sourceDurationSec: number;
+  cutWords: number[];
+  /** Word index -> caption text; JSON keys are strings, the server reads ints. */
+  wordText: Record<number, string>;
+  captionMaxChars: number;
+  assets: UploadedAsset[];
+  history: EditTurnPayload[];
+}
+
+export interface EditResponse {
+  /** One line for the user. */
+  reply: string;
+  /** Checked operations, in order; apply them as one undo step. */
+  operations: EditOperation[];
+  /** What the server moved into range or skipped. */
+  notes: string[];
+}
+
+/** Where an added or moved Clip goes; before and after name otherClip. */
+export type EditPlace = 'first' | 'last' | 'before' | 'after';
+/** The shared Look, or the own Look of one Clip (which then gets one). */
+export type EditTarget = 'shared' | 'clip';
+export type ClipEdge = 'start' | 'end';
+
+/** Only the Look values an operation changes. */
+export interface LookPatch {
+  headline?: Headline;
+  framingLayout?: {
+    fit?: VideoFit;
+    crop?: Partial<CropRegion>;
+    /** Merged into the Look's box, or the template's box when it has none. */
+    box?: Partial<VideoBoxSpec>;
+    /** Puts the video box back to the template's. */
+    defaultBox?: true;
+  };
+  textLayout?: {
+    headline?: Partial<TextPlacement>;
+    caption?: Partial<TextPlacement>;
+  };
+  style?: Partial<Omit<LookStyle, 'headline' | 'caption'>> & {
+    headline?: Partial<HeadlineStyle>;
+    caption?: Partial<TextStyle>;
+  };
+}
+
+interface EditPlacement {
+  /** Absent: after the Clip selected when the request was sent. */
+  place?: EditPlace;
+  otherClip?: number;
+}
+
+/** The Look an image or style operation edits. */
+interface EditLookTarget {
+  target: EditTarget;
+  /** Clip Number; set when target is 'clip'. */
+  clip?: number;
+}
+
+export type EditOperation =
+  | {op: 'setClipRange'; clip: number; startSec: number; endSec: number}
+  | {op: 'setClipEdge'; clip: number; edge: ClipEdge; atSec: number}
+  | {op: 'moveClipEdge'; clip: number; edge: ClipEdge; deltaSec: number}
+  | {op: 'shiftClip'; clip: number; deltaSec: number}
+  | {op: 'setClipDuration'; clip: number; durationSec: number}
+  | {op: 'splitClip'; clip: number; atSec: number}
+  | {op: 'deleteClip'; clip: number}
+  | {op: 'moveClip'; clip: number; place: EditPlace; otherClip?: number}
+  | {op: 'swapClips'; clip: number; otherClip: number}
+  | ({op: 'addSourceClip'; startSec: number; endSec: number} & EditPlacement)
+  | ({
+      op: 'addMediaClip';
+      assetId: string;
+      mediaKind: 'image' | 'video';
+      file: string;
+      startSec: number;
+      endSec: number;
+    } & EditPlacement)
+  | {op: 'setClipMute'; clip: number; mute: boolean}
+  | ({op: 'patchLook'; look: LookPatch} & EditLookTarget)
+  | {op: 'setOwnLook'; clip: number; own: boolean}
+  | ({
+      op: 'addImage';
+      assetId: string;
+      file: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotationDeg: number;
+    } & EditLookTarget)
+  | ({
+      op: 'updateImage';
+      imageId: string;
+      x?: number;
+      y?: number;
+      width?: number;
+      rotationDeg?: number;
+    } & EditLookTarget)
+  | ({op: 'removeImage'; imageId: string} & EditLookTarget)
+  | {op: 'setWordText'; word: number; text: string}
+  | {op: 'setLineText'; words: number[]; text: string}
+  | {op: 'resetWordText'; words: number[]}
+  | {op: 'cutWords'; words: number[]}
+  | {op: 'restoreWords'; words: number[]}
+  | {op: 'setCaptionMaxChars'; maxChars: number}
+  | {op: 'setMusic'; assetId: string; file: string; volume?: number}
+  | {op: 'setMusicVolume'; volume: number}
+  | {op: 'removeMusic'}
+  | {op: 'resetShorts'};

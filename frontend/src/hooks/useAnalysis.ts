@@ -1,6 +1,6 @@
 /**
  * Runs the agentic analysis and keeps what the screens show while it runs:
- * the server's current stage, the latest thought line and the start time.
+ * the server's current stage and the start time.
  */
 
 import {useCallback, useEffect, useRef, useState} from 'react';
@@ -11,8 +11,6 @@ import type {AnalysisResult, AnalyzeEvent, AnalyzeRequest} from '../types';
 export interface AnalysisProgress {
   /** Stage of the latest progress event; '' before the first one. */
   stage: string;
-  /** First line of the latest thought summary, without Markdown marks. */
-  thought: string;
   /** Date.now() when the run started; the elapsed time counts from here. */
   startedAt: number;
 }
@@ -21,30 +19,6 @@ export type AnalysisState =
   | {status: 'idle'}
   | {status: 'running'; progress: AnalysisProgress}
   | {status: 'failed'; error: string};
-
-/** The first non-empty line of a thought summary, without `**` and `#`. */
-function thoughtLine(text: string): string {
-  for (const line of text.split('\n')) {
-    const plain = line.replaceAll('**', '').replaceAll('#', '').trim();
-    if (plain) {
-      return plain;
-    }
-  }
-  return '';
-}
-
-function withProgress(
-  progress: AnalysisProgress,
-  event: Extract<AnalyzeEvent, {type: 'progress'}>,
-): AnalysisProgress {
-  if (event.stage === 'thought') {
-    const thought = thoughtLine(event.message);
-    return thought ? {...progress, thought} : progress;
-  }
-  // A new Gemini attempt starts thinking from scratch.
-  const fresh = event.stage === 'gemini' || event.stage === 'retry';
-  return {...progress, stage: event.stage, thought: fresh ? '' : progress.thought};
-}
 
 export function useAnalysis(onResult: (result: AnalysisResult) => void) {
   const [state, setState] = useState<AnalysisState>({status: 'idle'});
@@ -62,16 +36,18 @@ export function useAnalysis(onResult: (result: AnalysisResult) => void) {
         controller.current = null;
         setState(next);
       };
-      let progress: AnalysisProgress = {stage: '', thought: '', startedAt: Date.now()};
-      setState({status: 'running', progress});
+      const startedAt = Date.now();
+      setState({status: 'running', progress: {stage: '', startedAt}});
       const onEvent = (event: AnalyzeEvent) => {
         if (!isCurrent()) {
           return;
         }
         switch (event.type) {
           case 'progress':
-            progress = withProgress(progress, event);
-            setState({status: 'running', progress});
+            // A 'thought' event carries the model's thinking, which no screen shows.
+            if (event.stage !== 'thought') {
+              setState({status: 'running', progress: {stage: event.stage, startedAt}});
+            }
             break;
           case 'heartbeat':
             break;

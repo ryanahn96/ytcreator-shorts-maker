@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
+import contextlib
 import json
 import pathlib
 import secrets
@@ -28,6 +29,7 @@ import uvicorn
 from yt.studio import composer
 from yt.studio import config
 from yt.studio import director
+from yt.studio import edit_agent
 from yt.studio import fonts
 from yt.studio import gemini
 from yt.studio import ingestion
@@ -43,6 +45,8 @@ _workspace = storage.Workspace(
     _settings.workdir, _settings.retention_hours, _settings.gcs_bucket
 )
 _SESSION_MAX_AGE_SEC = int(_settings.retention_hours * 3600)
+# How often an Edit Request checks whether the browser stopped waiting.
+_DISCONNECT_POLL_SEC = 0.5
 
 
 def _error(message: str, status_code: int) -> responses.JSONResponse:
@@ -53,37 +57,27 @@ def _ndjson(event: dict[str, Any]) -> bytes:
   return (json.dumps(event, ensure_ascii=False) + '\n').encode('utf-8')
 
 
-def _is_https(request: fastapi.Request) -> bool:
-  proto = (
-      request.headers.get('x-forwarded-proto') or request.url.scheme or 'http'
-  )
-  return proto.split(',')[0].strip().lower() == 'https'
+def _proto(request: fastapi.Request) -> str:
+  proto = request.headers.get('x-forwarded-proto') or request.url.scheme
+  return proto.split(',')[0].strip()
 
 
 def _oauth_redirect_uri(request: fastapi.Request) -> str:
-  proto = (
-      request.headers.get('x-forwarded-proto') or request.url.scheme or 'http'
-  ).split(',')[0].strip()
   host = (
       request.headers.get('x-forwarded-host')
       or request.headers.get('host')
       or request.url.netloc
   ).split(',')[0].strip()
-  return f'{proto}://{host}/api/shortform/auth/callback'
+  return f'{_proto(request)}://{host}/api/shortform/auth/callback'
 
 
 def _current_session(request: fastapi.Request) -> models.OAuthSession | None:
   """Loads and refreshes the signed-in OAuth session from the cookie."""
   session_id = request.cookies.get(youtube.SESSION_COOKIE, '').strip()
-  if not session_id:
-    return None
   try:
     session = _workspace.load_session(session_id)
-  except storage.StorageError:
-    return None
-  if session is None:
-    return None
-  try:
+    if session is None:
+      return None
     return youtube.ensure_fresh_session(_settings, _workspace, session)
   except (youtube.YouTubeError, storage.StorageError):
     return None
@@ -166,7 +160,7 @@ def auth_login(request: fastapi.Request) -> fastapi.Response:
       max_age=600,
       httponly=True,
       samesite='lax',
-      secure=_is_https(request),
+      secure=_proto(request).lower() == 'https',
       path='/',
   )
   return response
@@ -206,7 +200,7 @@ def auth_callback(
       max_age=_SESSION_MAX_AGE_SEC,
       httponly=True,
       samesite='lax',
-      secure=_is_https(request),
+      secure=_proto(request).lower() == 'https',
       path='/',
   )
   return response
@@ -216,11 +210,8 @@ def auth_callback(
 def auth_logout(request: fastapi.Request) -> responses.JSONResponse:
   """Clears the creator's OAuth session cookie and stored token."""
   session_id = request.cookies.get(youtube.SESSION_COOKIE, '').strip()
-  if session_id:
-    try:
-      _workspace.discard_session(session_id)
-    except storage.StorageError:
-      pass
+  with contextlib.suppress(storage.StorageError):
+    _workspace.discard_session(session_id)
   response = responses.JSONResponse(
       youtube.auth_status(_settings, None).to_json()
   )
@@ -337,6 +328,39 @@ async def analyze(
   )
 
 
+@app.post('/api/shortform/edit')
+async def edit(
+    body: edit_agent.EditRequest, request: fastapi.Request
+) -> responses.JSONResponse:
+  """Answers one Edit Request (말로 편집) with checked edit operations.
+
+  The stored transcript and the linked YouTube data are read here (ADR
+  0011), so the browser only names the Source Video. When the browser stops
+  waiting (중단), the Gemini call is cancelled as soon as the disconnect
+  reaches the server.
+  """
+  await asyncio.to_thread(_require_session, request)
+  try:
+    transcript, context = await asyncio.gather(
+        asyncio.to_thread(_workspace.load_transcript, body.source_id),
+        asyncio.to_thread(_workspace.load_youtube_context, body.source_id),
+    )
+  except storage.StorageError as exc:
+    return _error(f'대본을 읽지 못했습니다: {exc}', 500)
+  task = asyncio.create_task(edit_agent.run(body, transcript, context))
+  try:
+    while not task.done():
+      await asyncio.wait({task}, timeout=_DISCONNECT_POLL_SEC)
+      if not task.done() and await request.is_disconnected():
+        return _error('편집 요청을 중단했습니다.', 499)
+    result = task.result()
+  except director.DirectorError as exc:
+    return _error(str(exc), 502)
+  finally:
+    task.cancel()
+  return responses.JSONResponse(result.to_json())
+
+
 def _schedule_purge() -> None:
   """Purges expired local files in the background without blocking uploads."""
   asyncio.create_task(asyncio.to_thread(_workspace.purge_expired))
@@ -422,7 +446,7 @@ async def upload_source(request: fastapi.Request) -> responses.JSONResponse:
   _schedule_purge()
   filename = urllib_parse.unquote(request.headers.get('x-filename', ''))
   filename = pathlib.PurePath(filename).name or 'source.mp4'
-  source_id, path = _workspace.new_source(filename, purge=False)
+  source_id, path = _workspace.new_source(filename)
   size = 0
   try:
     with path.open('wb', buffering=16 * 1024 * 1024) as handle:
@@ -503,10 +527,8 @@ async def upload_asset(
 
 async def _discard(remove: Callable[[str], None], item_id: str) -> None:
   """Removes a failed upload; a bucket error here is not worth reporting."""
-  try:
+  with contextlib.suppress(storage.StorageError):
     await asyncio.to_thread(remove, item_id)
-  except storage.StorageError:
-    pass
 
 
 def _asset_files(
@@ -552,8 +574,7 @@ async def render(
   if not source.has_audio:
     return _error('업로드한 원본에 오디오 트랙이 없습니다.', 422)
   profile = config.RENDER_PROFILES[body.quality]
-  render_id, folder = _workspace.new_render()
-  output = _workspace.render_output(folder)
+  render_id, output = _workspace.new_render()
   try:
     composition = composer.compose(
         body.plan,
@@ -567,7 +588,7 @@ async def render(
             asset_meta=asset_meta,
         ),
     )
-    await asyncio.to_thread(composer.run, composition, folder)
+    await asyncio.to_thread(composer.run, composition, output.parent)
     video_sec, audio_sec = await asyncio.to_thread(
         composer.measure_streams, output
     )
@@ -599,11 +620,8 @@ def font_file(font_id: str) -> fastapi.Response:
   path = fonts.path(font)
   if not path.is_file():
     return _error(f'글꼴 파일이 없습니다: {font.filename}', 404)
-  media_type = 'font/otf' if path.suffix == '.otf' else 'font/ttf'
   return responses.FileResponse(
-      path,
-      media_type=media_type,
-      headers={'Cache-Control': 'public, max-age=86400'},
+      path, headers={'Cache-Control': 'public, max-age=86400'}
   )
 
 
