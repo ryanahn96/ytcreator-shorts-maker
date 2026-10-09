@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars to override defaults without environment variables.
+# Do not commit terraform.tfvars (it is in .gitignore).
+
+# project_id      = ""
+# region          = "asia-northeast3"
+# service_name    = ""
+
+# Instance sizing and scaling.
+# cpu            = "4"
+# memory         = "8Gi"
+# min_instances  = 0
+# max_instances  = 5
+# retention_days = 1

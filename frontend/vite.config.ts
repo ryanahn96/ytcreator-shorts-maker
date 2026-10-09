@@ -7,8 +7,7 @@ import path from 'path';
 import { defineConfig, Plugin } from 'vite';
 
 const BACKEND_PORT = process.env.BACKEND_PORT || '5000';
-const BACKEND_TARGET =
-  process.env.VITE_BACKEND_URL || `http://127.0.0.1:${BACKEND_PORT}`;
+const BACKEND_TARGET = `http://127.0.0.1:${BACKEND_PORT}`;
 
 function checkBackendAlive(port: string): Promise<boolean> {
   return new Promise((resolve) => {
@@ -57,10 +56,8 @@ function pythonBackendPlugin(): Plugin {
       });
 
       const cleanup = () => {
-        if (pyProc && !pyProc.killed) {
-          pyProc.kill();
-          pyProc = null;
-        }
+        pyProc?.kill();
+        pyProc = null;
       };
 
       server.httpServer?.on('close', cleanup);
@@ -69,30 +66,19 @@ function pythonBackendPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
-  return {
-    plugins: [react(), tailwindcss(), pythonBackendPlugin()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
+export default defineConfig({
+  plugins: [react(), tailwindcss(), pythonBackendPlugin()],
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: BACKEND_TARGET,
+        changeOrigin: true,
+        xfwd: true,
+        timeout: 300000,
+        proxyTimeout: 300000,
       },
     },
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-      proxy: {
-        '/api': {
-          target: BACKEND_TARGET,
-          changeOrigin: true,
-          timeout: 300000,
-          proxyTimeout: 300000,
-        },
-      },
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
-  };
+  },
 });

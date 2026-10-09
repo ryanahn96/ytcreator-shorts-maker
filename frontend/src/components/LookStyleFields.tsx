@@ -2,15 +2,16 @@
  * The colors and fonts of a Look (LookStyle): the canvas background, the
  * border around a boxed video, and how the Headline and captions are
  * drawn. Every change goes to the Look being edited, so it follows the
- * same 공통 / Clip-only scope as the rest of the Look.
+ * same 모든 클립 / 이 클립만 scope as the rest of the Look.
  */
 
-import {ChevronDown, Undo2} from 'lucide-react';
 import {useState, type ReactNode} from 'react';
 
 import {fontStack, useFonts} from '../lib/fonts';
+import {sameJson} from '../lib/history';
 import type {FontEntry, HeadlineStyle, LookStyle, TextStyle, VideoFit} from '../types';
-import {ColorField, IconButton, SliderField, Toggle} from './ui';
+import {Icon} from './Icon';
+import {ColorField, IconButton, Section, SliderField, STATE_LAYER, Toggle} from './ui';
 
 // The same limits as TextStyle / LookStyle in yt/studio/models.py.
 const MIN_TEXT_SIZE = 16;
@@ -20,27 +21,30 @@ const MAX_BORDER_WIDTH = 40;
 
 const FONT_SAMPLE = '가나다 ABC 123';
 
-function sameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 function StyleSection(props: {
   title: string;
+  anchor?: string;
   resetLabel: string;
   changed: boolean;
   onReset: () => void;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-2 border-t border-zinc-800 pt-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-zinc-200">{props.title}</h3>
-        <IconButton label={props.resetLabel} disabled={!props.changed} onClick={props.onReset}>
-          <Undo2 size={14} />
-        </IconButton>
-      </div>
+    <Section
+      title={props.title}
+      anchor={props.anchor}
+      actions={
+        <IconButton
+          label={props.resetLabel}
+          icon="undo"
+          size="sm"
+          disabled={!props.changed}
+          onClick={props.onReset}
+        />
+      }
+    >
       {props.children}
-    </section>
+    </Section>
   );
 }
 
@@ -60,19 +64,27 @@ function FontChooser(props: {
   const current = props.fonts.find((entry) => entry.fontId === props.value);
   return (
     <details
-      className="group rounded-lg border border-zinc-800"
+      className="group overflow-hidden rounded-2xl bg-surface"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-1.5 text-xs text-zinc-300">
-        <span className="text-zinc-400">{props.label}</span>
+      <summary
+        className={`flex h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm ${STATE_LAYER}`}
+      >
+        <span className="text-on-surface-variant">{props.label}</span>
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm text-zinc-100" style={{fontFamily: fontStack(props.value)}}>
+          <span
+            className="truncate text-sm text-on-surface"
+            style={{fontFamily: fontStack(props.value)}}
+          >
             {current?.label ?? props.value}
           </span>
-          <ChevronDown size={14} className="shrink-0 text-zinc-500 group-open:rotate-180" />
+          <Icon
+            name="expand_more"
+            className="text-on-surface-variant transition-transform group-open:rotate-180"
+          />
         </span>
       </summary>
-      <div role="radiogroup" aria-label={props.label} className="grid gap-1 border-t border-zinc-800 p-1.5">
+      <div role="radiogroup" aria-label={props.label} className="grid gap-1 p-1.5 pt-0">
         {props.fonts.map((entry) => {
           const selected = entry.fontId === props.value;
           return (
@@ -82,14 +94,17 @@ function FontChooser(props: {
               role="radio"
               aria-checked={selected}
               onClick={() => props.onChange(entry.fontId)}
-              className={`flex items-baseline justify-between gap-2 rounded-md border px-2 py-1 text-left ${
+              className={`flex items-baseline justify-between gap-2 rounded-xl px-3 py-1.5 text-start ${STATE_LAYER} ${
                 selected
-                  ? 'border-indigo-500 bg-indigo-500/15'
-                  : 'border-transparent hover:bg-zinc-800'
+                  ? 'bg-secondary-container text-on-secondary-container'
+                  : 'text-on-surface'
               }`}
             >
-              <span className="text-[11px] text-zinc-400">{entry.label}</span>
-              <span className="truncate text-base text-zinc-100" style={{fontFamily: fontStack(entry.fontId)}}>
+              <span className="text-xs opacity-80">{entry.label}</span>
+              <span
+                className="truncate text-base"
+                style={{fontFamily: fontStack(entry.fontId)}}
+              >
                 {FONT_SAMPLE}
               </span>
             </button>
@@ -111,7 +126,7 @@ function TextStyleFields<T extends TextStyle>(props: {
 }) {
   const {value, onChange} = props;
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <FontChooser
         label={`${props.name} 글꼴`}
         fonts={props.fonts}
@@ -227,11 +242,6 @@ export function LookStyleFields(props: {
           format={(width) => `${width}`}
           onChange={(borderWidth) => onChange({...value, borderWidth})}
         />
-        <p className="text-[11px] text-zinc-500">
-          {boxed
-            ? '배경색은 영상 박스 바깥을 채웁니다. 테두리는 박스 바깥쪽에 그려집니다.'
-            : '전체 화면에서는 영상이 캔버스를 덮어 배경색이 보이지 않고, 테두리도 그리지 않습니다.'}
-        </p>
       </StyleSection>
       <StyleSection
         title="헤드라인 글자"
@@ -252,7 +262,7 @@ export function LookStyleFields(props: {
                 onChange={(accentColor) => setHeadline({...value.headline, accentColor})}
               />
               <ColorField
-                label="둘째 줄 색"
+                label="나머지 줄 색"
                 value={value.headline.color}
                 onChange={(color) => setHeadline({...value.headline, color})}
               />
@@ -262,6 +272,7 @@ export function LookStyleFields(props: {
       </StyleSection>
       <StyleSection
         title="자막 글자"
+        anchor="caption-style"
         resetLabel="자막 글자 기본값으로"
         changed={!sameJson(value.caption, defaults.caption)}
         onReset={() => setCaption(defaults.caption)}

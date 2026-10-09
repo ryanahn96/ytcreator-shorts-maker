@@ -1,13 +1,20 @@
 /**
- * Template geometry for the canvas preview, the YouTube preview and the crop
- * overlay.
+ * Template geometry for the canvas preview.
  *
  * cropRect, fitAspect and videoBox mirror crop_rect, fit_aspect and
  * video_box in yt/studio/layout.py, so the preview frames exactly what
  * ffmpeg renders.
  */
 
-import type {CropRegion, FramingLayout, LookStyle, TemplateStyle, VideoFit} from '../types';
+import {clamp} from './timeline';
+import type {
+  CropRegion,
+  FramingLayout,
+  LookStyle,
+  TemplateStyle,
+  VideoBoxSpec,
+  VideoFit,
+} from '../types';
 
 export interface Size {
   width: number;
@@ -23,9 +30,39 @@ function evenFloor(value: number): number {
   return Math.floor(value / 2) * 2;
 }
 
+/**
+ * Smallest width and height of a custom video box in canvas units. 말로
+ * 편집 checks the same minimum on the server (_MIN_VIDEO_BOX in
+ * yt/studio/edit_agent.py).
+ */
+export const MIN_VIDEO_BOX = 120;
+
+/** Clamps a custom VideoBoxSpec to valid even-floored canvas bounds. */
+export function clampVideoBox(
+  style: TemplateStyle,
+  spec: VideoBoxSpec,
+): VideoBoxSpec {
+  const width = clamp(evenFloor(spec.width), MIN_VIDEO_BOX, evenFloor(style.canvasWidth));
+  const height = clamp(evenFloor(spec.height), MIN_VIDEO_BOX, evenFloor(style.canvasHeight));
+  const x = clamp(evenFloor(spec.x), 0, evenFloor(style.canvasWidth - width));
+  const y = clamp(evenFloor(spec.y), 0, evenFloor(style.canvasHeight - height));
+  return {x, y, width, height};
+}
+
 /** Width / height of the area the video fills. */
-export function fitAspect(style: TemplateStyle, fit: VideoFit): number {
-  return fit === 'full' ? style.canvasWidth / style.canvasHeight : style.boxAspectRatio;
+export function fitAspect(
+  style: TemplateStyle,
+  framing: FramingLayout | VideoFit,
+): number {
+  const fit = typeof framing === 'string' ? framing : framing.fit;
+  if (fit === 'full') {
+    return style.canvasWidth / style.canvasHeight;
+  }
+  if (typeof framing !== 'string' && framing.box) {
+    const clamped = clampVideoBox(style, framing.box);
+    return clamped.width / clamped.height;
+  }
+  return style.boxAspectRatio;
 }
 
 /**
@@ -52,12 +89,26 @@ export function cropRect(region: CropRegion, aspect: number, source: Size): Rect
 
 /**
  * Returns the area the video fills in pixels of an output `width` pixels
- * wide: the template's box, or the whole output for a 'full' fit.
+ * wide: the custom or default box, or the whole output for a 'full' fit.
  */
-export function videoBox(style: TemplateStyle, width: number, fit: VideoFit = 'box'): Rect {
+export function videoBox(
+  style: TemplateStyle,
+  width: number,
+  framing: FramingLayout | VideoFit = 'box',
+): Rect {
   const scale = width / style.canvasWidth;
+  const outHeight = evenFloor(style.canvasHeight * scale);
+  const fit = typeof framing === 'string' ? framing : framing.fit;
   if (fit === 'full') {
-    return {x: 0, y: 0, width, height: evenFloor(style.canvasHeight * scale)};
+    return {x: 0, y: 0, width, height: outHeight};
+  }
+  if (typeof framing !== 'string' && framing.box) {
+    const custom = clampVideoBox(style, framing.box);
+    const boxWidth = clamp(evenFloor(custom.width * scale), 2, width);
+    const boxHeight = clamp(evenFloor(custom.height * scale), 2, outHeight);
+    const boxX = clamp(evenFloor(custom.x * scale), 0, width - boxWidth);
+    const boxY = clamp(evenFloor(custom.y * scale), 0, outHeight - boxHeight);
+    return {x: boxX, y: boxY, width: boxWidth, height: boxHeight};
   }
   const boxWidth = evenFloor((style.canvasWidth - 2 * style.boxSideMargin) * scale);
   const boxHeight = evenFloor(boxWidth / style.boxAspectRatio);
@@ -69,15 +120,13 @@ export function videoBox(style: TemplateStyle, width: number, fit: VideoFit = 'b
   };
 }
 
-/** Corner radius in output pixels; 0 for square corners or a 'full' fit. */
-export function cornerRadius(style: TemplateStyle, framing: FramingLayout, width: number): number {
-  return framing.fit === 'box' && framing.rounded
-    ? (style.boxCornerRadius * width) / style.canvasWidth
-    : 0;
-}
-
 /** Border ring width in output pixels; 0 when there is no border. */
-export function borderWidth(lookStyle: LookStyle, framing: FramingLayout, style: TemplateStyle, width: number): number {
+export function borderWidth(
+  lookStyle: LookStyle,
+  framing: FramingLayout,
+  style: TemplateStyle,
+  width: number,
+): number {
   return framing.fit === 'box' && lookStyle.border
     ? (lookStyle.borderWidth * width) / style.canvasWidth
     : 0;
@@ -85,8 +134,8 @@ export function borderWidth(lookStyle: LookStyle, framing: FramingLayout, style:
 
 /**
  * Draws one video frame into the template on a canvas of `output` size:
- * background color, the cropped video in its box, and the border ring
- * (as composer.build_ass draws it: outside the box, radius + width).
+ * background color, the cropped video in its square-cornered box, and the
+ * border ring (as composer.build_ass draws it: outside the box).
  */
 export function drawFrame(input: {
   context: CanvasRenderingContext2D;
@@ -98,15 +147,10 @@ export function drawFrame(input: {
   output: Size;
 }): void {
   const {context, image, framing, lookStyle, style, source, output} = input;
-  const box = videoBox(style, output.width, framing.fit);
-  const from = cropRect(framing.crop, fitAspect(style, framing.fit), source);
-  const radius = cornerRadius(style, framing, output.width);
+  const box = videoBox(style, output.width, framing);
+  const from = cropRect(framing.crop, fitAspect(style, framing), source);
   context.fillStyle = lookStyle.backgroundColor;
   context.fillRect(0, 0, output.width, output.height);
-  context.save();
-  context.beginPath();
-  context.roundRect(box.x, box.y, box.width, box.height, radius);
-  context.clip();
   context.drawImage(
     image,
     from.x,
@@ -118,18 +162,16 @@ export function drawFrame(input: {
     box.width,
     box.height,
   );
-  context.restore();
   const ring = borderWidth(lookStyle, framing, style, output.width);
   if (ring > 0) {
     context.beginPath();
-    context.roundRect(
+    context.rect(
       box.x - ring,
       box.y - ring,
       box.width + 2 * ring,
       box.height + 2 * ring,
-      radius > 0 ? radius + ring : 0,
     );
-    context.roundRect(box.x, box.y, box.width, box.height, radius);
+    context.rect(box.x, box.y, box.width, box.height);
     context.fillStyle = lookStyle.borderColor;
     context.fill('evenodd');
   }

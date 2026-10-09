@@ -15,6 +15,7 @@ from google.auth.transport import requests as google_auth_requests
 from google.genai import types
 
 from yt.studio import config
+from yt.studio import gcp
 from yt.studio import models
 
 _CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
@@ -29,7 +30,7 @@ _VERTEX_LOGIN_HINT = (
 
 
 def label(settings: config.Settings) -> str:
-  """Returns the backend name used in progress and error messages."""
+  """Returns the backend name used in error messages."""
   return _LABELS[settings.gemini_backend]
 
 
@@ -44,6 +45,7 @@ def make_client(settings: config.Settings) -> genai.Client:
       timeout=int(settings.gemini_timeout_sec * 1000)
   )
   if settings.gemini_backend == 'vertex':
+    gcp.ensure_vertex_api_enabled(settings)
     return genai.Client(
         vertexai=True,
         project=settings.vertex_project,
@@ -84,4 +86,5 @@ def credentials_error(settings: config.Settings) -> str:
     return ''
   except google_auth_exceptions.GoogleAuthError as exc:
     return auth_failure_message(settings, exc)
-  return ''
+  # Verify and auto-enable Vertex AI API if disabled.
+  return gcp.ensure_vertex_api_enabled(settings)

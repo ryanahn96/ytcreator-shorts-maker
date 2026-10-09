@@ -7,3 +7,5 @@ ADR 0004의 Short Template은 Headline과 자막 자리를 고정했다. 사용�
 영상 파일 분석은 YouTube URL 대신 업로드한 Source Video를 360p·10fps 분석용 사본으로 줄여 요청에 직접 담고 AGENTIC으로 보낸다. Files API는 AI Studio에만 있어 두 백엔드에 같은 방식을 쓰며, Vertex 인라인 한도(100MB)를 넘으면 분석을 거절한다. 자막이 없으므로 받아쓰기도 Gemini가 한다. 분석을 다시 돌리는 기능은 이미 있었다(Editorial Prompt를 고치고 다시 분석).
 
 갱신: 화면 구성을 Scenario 전체에 하나로 두던 부분은 [ADR 0006](0006-per-clip-looks-and-video-fit.md)의 Clip별 Look으로 바뀌었다.
+
+갱신: YouTube URL로 분석을 시작하던 경로는 [ADR 0008](0008-file-only-source-video.md)에서 지웠다. 이제 영상 파일만 받는다.

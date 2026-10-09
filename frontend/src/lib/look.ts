@@ -19,11 +19,6 @@ export function lookTarget(scenario: Scenario, clipIndex: number): string | null
   return clip?.look ? clip.clipId : null;
 }
 
-/** Numbers (1-based) of the Clips that have their own Look. */
-export function ownLookClipNumbers(scenario: Scenario): number[] {
-  return scenario.clips.flatMap((clip, index) => (clip.look ? [index + 1] : []));
-}
-
 /** Whether two Text Layouts put the text at the same place. */
 export function sameTextLayout(a: Look['textLayout'], b: Look['textLayout']): boolean {
   return (
@@ -33,3 +28,10 @@ export function sameTextLayout(a: Look['textLayout'], b: Look['textLayout']): bo
     a.caption.y === b.caption.y
   );
 }
+
+/**
+ * One change to a Look, applied to the Look as it is when the change lands
+ * rather than as it was when the change started (a stage drag can outlast
+ * an Edit Request that edits the same Look).
+ */
+export type LookEdit = (look: Look) => Look;

@@ -363,19 +363,6 @@ wheels = [
 ]
 
 [[package]]
-name = "httpcore2"
-version = "2.12.0"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
-]
-sdist = { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpcore2/httpcore2-2.12.0.tar.gz", hash = "sha256:9293522bba0aa7c4c8e9e3f040c16575bd8868e155a77fa30c7a9085a5eae648" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpcore2/httpcore2-2.12.0-py3-none-any.whl", hash = "sha256:7e04258ce01013d7d615e5b910a3b27fac937d7a95038227e79652b4ba3b4ceb" },
-]
-
-[[package]]
 name = "httpx"
 version = "0.28.1"
 source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
@@ -388,30 +375,6 @@ dependencies = [
 sdist = { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpx/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc" }
 wheels = [
     { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpx/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad" },
-]
-
-[[package]]
-name = "httpx2"
-version = "2.12.0"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-dependencies = [
-    { name = "anyio", marker = "sys_platform != 'emscripten'" },
-    { name = "httpcore2", marker = "sys_platform != 'emscripten'" },
-    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten'" },
-    { name = "idna" },
-    { name = "truststore", marker = "sys_platform != 'emscripten'" },
-]
-sdist = { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpx2/httpx2-2.12.0.tar.gz", hash = "sha256:7631fe9887a8a2275f4a2540e053aa670fcc50742864a9ae7c66e609fdcf12cf" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpx2/httpx2-2.12.0-py3-none-any.whl", hash = "sha256:cc8b6eecb8661c146b8f89a60e97456ee086e91a784ed31ac450c3a9e613dd36" },
-]
-
-[[package]]
-name = "httpx2-jsfetch"
-version = "1.0"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/httpx2-jsfetch/httpx2_jsfetch-1.0-py3-none-any.whl", hash = "sha256:cb916b707601e69a07721aabc8f3f6659be3a6893bc1ff5c6f9e02241df2da32" },
 ]
 
 [[package]]
@@ -597,15 +560,6 @@ wheels = [
 ]
 
 [[package]]
-name = "truststore"
-version = "0.10.4"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-sdist = { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/truststore/truststore-0.10.4.tar.gz", hash = "sha256:9d91bd436463ad5e4ee4aba766628dd6cd7010cf3e2461756b3303710eebc301" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/truststore/truststore-0.10.4-py3-none-any.whl", hash = "sha256:adaeaecf1cbb5f4de3b1959b42d41f6fab57b2b1666adb59e89cb0b53361d981" },
-]
-
-[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
@@ -704,23 +658,6 @@ wheels = [
 ]
 
 [[package]]
-name = "yt-dlp"
-version = "2026.8.19"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/yt-dlp/yt_dlp-2026.8.19-py3-none-any.whl", hash = "sha256:1d57897e94c6665a0a6f9bc54b34e584284e32c034ffab3a7df25d8f7b24eedf" },
-]
-
-[[package]]
-name = "yt-dlp-ejs"
-version = "0.8.0"
-source = { registry = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/simple/" }
-sdist = { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/yt-dlp-ejs/yt_dlp_ejs-0.8.0.tar.gz", hash = "sha256:d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e" }
-wheels = [
-    { url = "http://airlock-proxy.uplink.goog:999/python/artifact-foundry-prod/python-3p-limited-internal-use/yt-dlp-ejs/yt_dlp_ejs-0.8.0-py3-none-any.whl", hash = "sha256:79300e5fca7f937a1eeede11f0456862c1b41107ce1d726871e0207424f4bdb4" },
-]
-
-[[package]]
 name = "ytcreator"
 version = "0.1.0"
 source = { virtual = "." }
@@ -728,13 +665,10 @@ dependencies = [
     { name = "fastapi" },
     { name = "google-genai" },
     { name = "httpx" },
-    { name = "httpx2" },
     { name = "hypercorn" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "uvicorn" },
-    { name = "yt-dlp" },
-    { name = "yt-dlp-ejs" },
 ]
 
 [package.metadata]
@@ -742,11 +676,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "google-genai", specifier = ">=2.23.0" },
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "httpx2", specifier = ">=2.12.0" },
     { name = "hypercorn", specifier = ">=0.17.3" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
     { name = "uvicorn", specifier = ">=0.34.0" },
-    { name = "yt-dlp", specifier = ">=2026.8.19" },
-    { name = "yt-dlp-ejs", specifier = ">=0.8.0" },
 ]

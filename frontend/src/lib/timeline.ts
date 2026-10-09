@@ -4,14 +4,15 @@
  *
  * It runs on every edit so the editor, preview and export stay in sync
  * without a server round trip. The backend (yt/studio/composer.py) then
- * re-validates the plan, snaps it to the frame grid and applies J/L-cuts.
+ * re-validates the plan and snaps it to the frame grid. Clips meet with
+ * hard cuts, so picture and sound share one segment list.
  */
 
 import {effectiveLook} from './look';
 import type {
-  AudioTransition,
   CaptionCue,
   Clip,
+  ClipMediaKind,
   CompositionSettings,
   CueWord,
   Look,
@@ -52,30 +53,24 @@ export interface ResolvedClip {
   /** Transcript Words that start inside the Clip. */
   words: readonly TranscriptWord[];
   subcuts: TimeRange[];
-  keptSec: number;
   /** Index in RenderPlan.clips, or null when no Subcut is left. */
   planIndex: number | null;
 }
 
-/** A Subcut placed on the output timeline. */
+/** A Subcut placed on the output timeline (picture and sound alike). */
 export interface OutputSegment extends TimeRange {
   planIndex: number;
   outputStartSec: number;
+  mediaKind: ClipMediaKind;
+  assetId: string | null;
+  muteAudio: boolean;
 }
 
-/**
- * A piece of the video track. `window` marks the frames a J/L-cut shows
- * while another Clip's audio plays (outside every audio segment).
- */
-export interface VideoSegment extends OutputSegment {
-  window: boolean;
-}
-
-/** A caption on the output timeline, with each word's output start. */
+/** A caption on the output timeline. */
 export interface OutputCue {
   startSec: number;
   endSec: number;
-  words: {text: string; startSec: number}[];
+  text: string;
 }
 
 export interface ResolvedScenario {
@@ -84,6 +79,16 @@ export interface ResolvedScenario {
   segments: OutputSegment[];
   cues: OutputCue[];
   durationSec: number;
+}
+
+/** `seconds` rounded to whole milliseconds. */
+export function roundMs(seconds: number): number {
+  return Math.round(seconds * 1000) / 1000;
+}
+
+/** `value` limited to `low`..`high` (`high` wins when they cross). */
+export function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), high);
 }
 
 export function totalSec(ranges: readonly TimeRange[]): number {
@@ -113,31 +118,10 @@ export function wordsStartingIn(
   words: readonly TranscriptWord[],
   range: TimeRange,
 ): TranscriptWord[] {
-  const result: TranscriptWord[] = [];
-  for (
-    let index = firstWordAtOrAfter(words, range.startSec);
-    index < words.length && words[index].startSec < range.endSec;
-    index++
-  ) {
-    result.push(words[index]);
-  }
-  return result;
-}
-
-/**
- * Gaps between consecutive words. They stand in for pauses until an
- * uploaded MP4 provides measured silences.
- */
-export function wordGapPauses(words: readonly TranscriptWord[]): TimeRange[] {
-  const pauses: TimeRange[] = [];
-  for (let index = 1; index < words.length; index++) {
-    const startSec = words[index - 1].endSec;
-    const endSec = words[index].startSec;
-    if (endSec > startSec) {
-      pauses.push({startSec, endSec});
-    }
-  }
-  return pauses.sort((a, b) => a.startSec - b.startSec);
+  return words.slice(
+    firstWordAtOrAfter(words, range.startSec),
+    firstWordAtOrAfter(words, range.endSec),
+  );
 }
 
 /** Moves `seconds` to the nearest word start or end among `words`. */
@@ -215,6 +199,11 @@ function captionText(word: TranscriptWord, edits: TranscriptEdits): string {
   return (edits.wordText.get(word.index) ?? word.text).trim();
 }
 
+function maxWordDurationSec(text: string): number {
+  const clean = text.replace(/[.,?!:;"'()[\]…\-—]/g, '').length;
+  return Math.min(1.2, Math.max(0.35, Math.max(1, clean) * 0.16 + 0.15));
+}
+
 /** Groups a Clip's words into caption lines. */
 function captionCues(
   resolved: Pick<ResolvedClip, 'clip' | 'words'>,
@@ -241,16 +230,27 @@ function captionCues(
   let line: CueWord[] = [];
   let chars = 0;
   let previousStart = clip.startSec;
+  let previousEnd = clip.startSec;
   for (const word of words) {
     const text = captionText(word, edits);
     if (word.isSoundTag || edits.cutWords.has(word.index) || !text) {
       continue;
     }
+    const wordEnd = Math.max(
+      word.startSec,
+      Math.min(word.endSec, clip.endSec),
+    );
+    const maxWordSec = maxWordDurationSec(text);
+    const wordStart =
+      wordEnd - word.startSec > maxWordSec
+        ? Math.max(previousEnd, word.startSec, wordEnd - maxWordSec)
+        : word.startSec;
     const breaks =
       line.length > 0 &&
       (transcript.lineStarts.has(word.index) ||
         chars + 1 + text.length > settings.captionMaxChars ||
-        pausedBetween(previousStart, word.startSec));
+        wordStart - previousEnd >= settings.captionMaxGapSec ||
+        pausedBetween(previousStart, wordStart));
     if (breaks) {
       cues.push({clipIndex: planIndex, words: line});
       line = [];
@@ -259,10 +259,11 @@ function captionCues(
     chars += (line.length > 0 ? 1 : 0) + text.length;
     line.push({
       text,
-      startSec: word.startSec,
-      endSec: Math.max(word.startSec, Math.min(word.endSec, clip.endSec)),
+      startSec: wordStart,
+      endSec: Math.max(wordStart, wordEnd),
     });
-    previousStart = word.startSec;
+    previousStart = wordStart;
+    previousEnd = Math.max(wordStart, wordEnd);
   }
   if (line.length > 0) {
     cues.push({clipIndex: planIndex, words: line});
@@ -274,8 +275,18 @@ function outputSegments(clips: readonly RenderClip[]): OutputSegment[] {
   const segments: OutputSegment[] = [];
   let cursor = 0;
   clips.forEach((clip, planIndex) => {
+    const mediaKind: ClipMediaKind = clip.mediaKind ?? 'source';
+    const assetId = clip.assetId ?? null;
+    const muteAudio = Boolean(clip.muteAudio);
     for (const subcut of clip.subcuts) {
-      segments.push({...subcut, planIndex, outputStartSec: cursor});
+      segments.push({
+        ...subcut,
+        planIndex,
+        outputStartSec: cursor,
+        mediaKind,
+        assetId,
+        muteAudio,
+      });
       cursor += subcut.endSec - subcut.startSec;
     }
   });
@@ -314,13 +325,11 @@ function outputCues(
     if (!clipSegments) {
       continue;
     }
-    const words = cue.words.map((word) => ({
-      text: word.text,
-      startSec: toOutput(word.startSec, clipSegments),
-    }));
+    const startSec = toOutput(cue.words[0].startSec, clipSegments);
     const endSec = toOutput(cue.words[cue.words.length - 1].endSec, clipSegments);
-    if (endSec - words[0].startSec >= minCueSec) {
-      cues.push({startSec: words[0].startSec, endSec, words});
+    if (endSec - startSec >= minCueSec) {
+      const text = cue.words.map((word) => word.text).join(' ');
+      cues.push({startSec, endSec, text});
     }
   }
   cues.sort((a, b) => a.startSec - b.startSec);
@@ -379,34 +388,55 @@ export function resolveScenario(input: {
   const clips: ResolvedClip[] = [];
   for (const clip of scenario.clips) {
     const look = effectiveLook(scenario, clip);
+    const mediaKind: ClipMediaKind = clip.mediaKind ?? 'source';
+    if (mediaKind !== 'source') {
+      const duration = clip.endSec - clip.startSec;
+      const subcuts: TimeRange[] =
+        duration >= settings.minSubcutSec && Boolean(clip.assetId)
+          ? [{startSec: clip.startSec, endSec: clip.endSec}]
+          : [];
+      if (subcuts.length === 0) {
+        clips.push({clip, look, words: [], subcuts, planIndex: null});
+        continue;
+      }
+      const planIndex = planClips.length;
+      planClips.push({
+        subcuts,
+        look: {...look, headline: {lines: shownHeadlineLines(look.headline.lines)}},
+        mediaKind,
+        assetId: clip.assetId ?? null,
+        muteAudio: Boolean(clip.muteAudio),
+      });
+      clips.push({
+        clip,
+        look,
+        words: [],
+        subcuts,
+        planIndex,
+      });
+      continue;
+    }
     const words = wordsStartingIn(transcript.words, clip);
     const subcuts = clipSubcuts({range: clip, words, edits, pauses, settings});
     if (subcuts.length === 0) {
-      clips.push({clip, look, words, subcuts, keptSec: 0, planIndex: null});
+      clips.push({clip, look, words, subcuts, planIndex: null});
       continue;
     }
     const planIndex = planClips.length;
     planClips.push({
       subcuts,
-      look: {
-        ...look,
-        headline: {accent: look.headline.accent.trim(), main: look.headline.main.trim()},
-      },
+      look: {...look, headline: {lines: shownHeadlineLines(look.headline.lines)}},
+      mediaKind: 'source',
+      assetId: null,
+      muteAudio: false,
     });
     cues.push(
       ...captionCues({clip, words}, planIndex, transcript, edits, pauses, settings),
     );
-    clips.push({clip, look, words, subcuts, keptSec: totalSec(subcuts), planIndex});
+    clips.push({clip, look, words, subcuts, planIndex});
   }
   const plan: RenderPlan | null =
-    planClips.length > 0
-      ? {
-          clips: planClips,
-          cues,
-          audioTransition: scenario.audioTransition,
-          music: scenario.music,
-        }
-      : null;
+    planClips.length > 0 ? {clips: planClips, cues, music: scenario.music} : null;
   const segments = outputSegments(planClips);
   return {
     clips,
@@ -415,6 +445,11 @@ export function resolveScenario(input: {
     cues: plan ? outputCues(plan, segments, input.minCueSec) : [],
     durationSec: totalSec(segments),
   };
+}
+
+/** The Headline lines that are drawn: trimmed, empty ones dropped. */
+export function shownHeadlineLines(lines: readonly string[]): string[] {
+  return lines.map((line) => line.trim()).filter((line) => line.length > 0);
 }
 
 /** The segment playing at `outputSec` and the matching source time. */
@@ -438,68 +473,4 @@ export function locateOutput(
     index,
     sourceSec: Math.min(segment.startSec + offset, segment.endSec),
   };
-}
-
-/**
- * Returns the video track of an edit: the audio segments with the Clip
- * boundaries moved the way composer._apply_transition moves them. A J-cut
- * keeps showing the previous Clip past its audio and skips the next
- * Clip's first frames; an L-cut does the opposite. The total length stays
- * that of the audio. Without a transition every piece matches its audio.
- */
-export function videoSegments(
-  segments: readonly OutputSegment[],
-  transition: AudioTransition,
-  fps: number,
-  sourceDurationSec: number,
-): VideoSegment[] {
-  const frame = fps > 0 ? 1 / fps : 0;
-  const snap = (seconds: number) => (fps > 0 ? Math.round(seconds * fps) / fps : seconds);
-  const floorFrames = (seconds: number) =>
-    fps > 0 ? Math.floor(seconds * fps + 1e-6) / fps : seconds;
-  const lead = snap(transition.durationSec);
-  const pieces: VideoSegment[] = segments.map((segment) => ({...segment, window: false}));
-  if (transition.kind !== 'hard_cut' && lead > 0) {
-    // Walk the Clip boundaries from the end so insertions keep indices valid.
-    for (let index = pieces.length - 1; index > 0; index--) {
-      const last = pieces[index - 1];
-      const first = pieces[index];
-      if (last.planIndex === first.planIndex || last.window || first.window) {
-        continue;
-      }
-      if (transition.kind === 'j_cut') {
-        const room = floorFrames(
-          Math.max(0, Math.min(lead, sourceDurationSec - last.endSec, first.endSec - first.startSec - frame)),
-        );
-        if (room > 0) {
-          pieces[index] = {...first, startSec: first.startSec + room};
-          pieces.splice(index, 0, {
-            ...last,
-            startSec: last.endSec,
-            endSec: last.endSec + room,
-            window: true,
-          });
-        }
-      } else if (transition.kind === 'l_cut') {
-        const room = floorFrames(
-          Math.max(0, Math.min(lead, first.startSec, last.endSec - last.startSec - frame)),
-        );
-        if (room > 0) {
-          pieces[index - 1] = {...last, endSec: last.endSec - room};
-          pieces.splice(index, 0, {
-            ...first,
-            startSec: first.startSec - room,
-            endSec: first.startSec,
-            window: true,
-          });
-        }
-      }
-    }
-  }
-  let cursor = 0;
-  return pieces.map((piece) => {
-    const placed = {...piece, outputStartSec: cursor};
-    cursor += piece.endSec - piece.startSec;
-    return placed;
-  });
 }

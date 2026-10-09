@@ -13,26 +13,24 @@ import {
 } from 'react';
 
 import {formatClock} from '../lib/format';
-import type {TimeRange} from '../types';
+import {clamp, roundMs} from '../lib/timeline';
+import type {
+  TimeRange,
+  YouTubeRetentionPeak,
+  YouTubeRetentionPoint,
+} from '../types';
 
-export type RangeHandle = 'start' | 'end';
+export type RangeHandle = 'start' | 'end' | 'move';
 
 interface Drag {
   handle: RangeHandle;
   origin: TimeRange;
+  grabSec: number;
   range: TimeRange;
 }
 
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), high);
-}
-
 function isHandle(value: string | undefined): value is RangeHandle {
-  return value === 'start' || value === 'end';
-}
-
-function roundMs(seconds: number): number {
-  return Math.round(seconds * 1000) / 1000;
+  return value === 'start' || value === 'end' || value === 'move';
 }
 
 function keyDelta(event: KeyboardEvent, step: number): number {
@@ -48,8 +46,67 @@ function keyDelta(event: KeyboardEvent, step: number): number {
   }
 }
 
+function RetentionOverlay(props: {
+  points: readonly YouTubeRetentionPoint[];
+  peaks?: readonly YouTubeRetentionPeak[];
+  lows?: readonly YouTubeRetentionPeak[];
+  bounds: TimeRange;
+  sourceDurationSec: number;
+}) {
+  const {points, peaks = [], lows = [], bounds, sourceDurationSec} = props;
+  if (points.length < 2 || sourceDurationSec <= 0) {
+    return null;
+  }
+  const span = Math.max(bounds.endSec - bounds.startSec, Number.EPSILON);
+  const maxWatch = Math.max(1, ...points.map((p) => p.watchRatio));
+  const coords = points.map((p) => {
+    const sec = p.elapsedRatio * sourceDurationSec;
+    const x = ((sec - bounds.startSec) / span) * 100;
+    const y = (1 - clamp(p.watchRatio / maxWatch, 0, 1)) * 36 + 4;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const linePath = `M ${coords.join(' L ')}`;
+  return (
+    <svg
+      viewBox="0 0 100 44"
+      preserveAspectRatio="none"
+      aria-hidden
+      className="pointer-events-none absolute inset-0 h-full w-full overflow-hidden rounded-xl"
+    >
+      {[
+        ...peaks.map((band) => ({band, fill: 'fill-primary/15'})),
+        ...lows.map((band) => ({band, fill: 'fill-error/15'})),
+      ].map(({band, fill}, idx) => {
+        const x1 = clamp(((band.startSec - bounds.startSec) / span) * 100, 0, 100);
+        const x2 = clamp(((band.endSec - bounds.startSec) / span) * 100, 0, 100);
+        if (x2 <= x1) {
+          return null;
+        }
+        return (
+          <rect
+            key={idx}
+            x={x1}
+            y={0}
+            width={x2 - x1}
+            height={44}
+            className={fill}
+          />
+        );
+      })}
+      <path
+        d={linePath}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+        className="text-primary/50"
+      />
+    </svg>
+  );
+}
+
 function Thumb(props: {
-  handle: RangeHandle;
+  handle: 'start' | 'end';
   value: number;
   bounds: TimeRange;
   left: string;
@@ -69,7 +126,7 @@ function Thumb(props: {
       aria-valuetext={formatClock(props.value)}
       data-handle={props.handle}
       onKeyDown={props.onKeyDown}
-      className="absolute inset-y-0 w-3 -translate-x-1/2 cursor-ew-resize rounded-sm bg-indigo-400 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white"
+      className="absolute inset-y-0 z-10 w-2.5 -translate-x-1/2 cursor-ew-resize rounded-full bg-primary outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
       style={{left: props.left}}
     />
   );
@@ -86,43 +143,58 @@ export function RangeSlider(props: {
   kept: readonly TimeRange[];
   stepSec: number;
   largeStepSec: number;
+  /** Optional YouTube Audience Retention points (0..1) to overlay on the track. */
+  retentionPoints?: readonly YouTubeRetentionPoint[];
+  retentionPeaks?: readonly YouTubeRetentionPeak[];
+  retentionLows?: readonly YouTubeRetentionPeak[];
+  sourceDurationSec?: number;
   /** A drag in progress, or null when it ends without a commit. */
   onDraft: (range: TimeRange | null) => void;
   /** `snap` names the dragged handle, or is null for exact values. */
   onCommit: (range: TimeRange, snap: RangeHandle | null) => void;
 }) {
   const {bounds, range, minGapSec} = props;
-  const trackRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const span = Math.max(bounds.endSec - bounds.startSec, Number.EPSILON);
   const percent = (seconds: number) =>
-    `${(clamp((seconds - bounds.startSec) / span, 0, 1)) * 100}%`;
+    `${clamp((seconds - bounds.startSec) / span, 0, 1) * 100}%`;
   const widthPercent = (piece: TimeRange) =>
-    `${(clamp((piece.endSec - piece.startSec) / span, 0, 1)) * 100}%`;
+    `${clamp((piece.endSec - piece.startSec) / span, 0, 1) * 100}%`;
 
   const moved = (
-    current: TimeRange,
+    origin: TimeRange,
     handle: RangeHandle,
     seconds: number,
-  ): TimeRange =>
-    handle === 'start'
+    grabSec = seconds,
+  ): TimeRange => {
+    if (handle === 'move') {
+      const duration = Math.max(minGapSec, origin.endSec - origin.startSec);
+      const maxStart = Math.max(bounds.startSec, bounds.endSec - duration);
+      const startSec = clamp(origin.startSec + (seconds - grabSec), bounds.startSec, maxStart);
+      return {
+        startSec: roundMs(startSec),
+        endSec: roundMs(Math.min(bounds.endSec, startSec + duration)),
+      };
+    }
+    return handle === 'start'
       ? {
-          startSec: clamp(seconds, bounds.startSec, current.endSec - minGapSec),
-          endSec: current.endSec,
+          startSec: clamp(seconds, bounds.startSec, origin.endSec - minGapSec),
+          endSec: origin.endSec,
         }
       : {
-          startSec: current.startSec,
-          endSec: clamp(seconds, current.startSec + minGapSec, bounds.endSec),
+          startSec: origin.startSec,
+          endSec: clamp(seconds, origin.startSec + minGapSec, bounds.endSec),
         };
+  };
 
-  const secondsAt = (clientX: number): number => {
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) {
+  const secondsAt = (event: PointerEvent<HTMLDivElement>): number => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) {
       return bounds.startSec;
     }
-    return bounds.startSec + clamp((clientX - rect.left) / rect.width, 0, 1) * span;
+    return bounds.startSec + clamp((event.clientX - rect.left) / rect.width, 0, 1) * span;
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -130,21 +202,23 @@ export function RangeSlider(props: {
       return;
     }
     event.preventDefault();
-    const seconds = secondsAt(event.clientX);
+    const seconds = secondsAt(event);
     const target =
       event.target instanceof HTMLElement
         ? event.target.closest<HTMLElement>('[data-handle]')
         : null;
     const named = target?.dataset['handle'];
-    const nearest: RangeHandle =
+    const nearest: 'start' | 'end' =
       Math.abs(seconds - range.startSec) <= Math.abs(seconds - range.endSec)
         ? 'start'
         : 'end';
-    const handle = isHandle(named) ? named : nearest;
+    const handle: RangeHandle = isHandle(named) ? named : nearest;
     event.currentTarget.setPointerCapture(event.pointerId);
-    (handle === 'start' ? startRef : endRef).current?.focus();
-    const next = isHandle(named) ? range : moved(range, handle, seconds);
-    drag.current = {handle, origin: range, range: next};
+    if (handle !== 'move') {
+      (handle === 'start' ? startRef : endRef).current?.focus();
+    }
+    const next = isHandle(named) ? range : moved(range, handle, seconds, seconds);
+    drag.current = {handle, origin: range, grabSec: seconds, range: next};
     if (next !== range) {
       props.onDraft(next);
     }
@@ -155,7 +229,12 @@ export function RangeSlider(props: {
     if (!current) {
       return;
     }
-    current.range = moved(current.range, current.handle, secondsAt(event.clientX));
+    current.range = moved(
+      current.origin,
+      current.handle,
+      secondsAt(event),
+      current.grabSec,
+    );
     props.onDraft(current.range);
   };
 
@@ -180,7 +259,7 @@ export function RangeSlider(props: {
   };
 
   const onKeyDown =
-    (handle: RangeHandle) => (event: KeyboardEvent<HTMLDivElement>) => {
+    (handle: 'start' | 'end') => (event: KeyboardEvent<HTMLDivElement>) => {
       const delta = keyDelta(
         event,
         event.shiftKey ? props.largeStepSec : props.stepSec,
@@ -196,28 +275,38 @@ export function RangeSlider(props: {
   return (
     <div className="select-none">
       <div
-        ref={trackRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(event) => finish(event, true)}
         onPointerCancel={(event) => finish(event, false)}
-        className="relative h-11 cursor-pointer touch-none rounded-md bg-zinc-800"
+        className="relative h-11 cursor-pointer touch-none rounded-xl bg-surface-container-highest"
       >
+        {props.retentionPoints && props.sourceDurationSec !== undefined && (
+          <RetentionOverlay
+            points={props.retentionPoints}
+            peaks={props.retentionPeaks}
+            lows={props.retentionLows}
+            bounds={bounds}
+            sourceDurationSec={props.sourceDurationSec}
+          />
+        )}
         {props.ticks.map((seconds, index) => (
           <span
             key={index}
-            className="pointer-events-none absolute top-0 h-2 w-px bg-zinc-600"
+            className="pointer-events-none absolute top-0 h-2 w-px bg-outline"
             style={{left: percent(seconds)}}
           />
         ))}
         <div
-          className="pointer-events-none absolute inset-y-2 border-y border-indigo-400/60 bg-indigo-500/20"
+          data-handle="move"
+          title="드래그해서 클립 구간 통째로 앞뒤 이동"
+          className=" absolute inset-y-2 cursor-grab border-y border-primary/50 bg-primary/15 hover:bg-primary/25 active:cursor-grabbing"
           style={{left: percent(range.startSec), width: widthPercent(range)}}
         />
         {props.kept.map((piece, index) => (
           <div
             key={index}
-            className="pointer-events-none absolute bottom-2 h-1.5 bg-emerald-400"
+            className="pointer-events-none absolute bottom-2 h-1.5 rounded-full bg-primary"
             style={{left: percent(piece.startSec), width: widthPercent(piece)}}
           />
         ))}
@@ -238,7 +327,7 @@ export function RangeSlider(props: {
           onKeyDown={onKeyDown('end')}
         />
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-zinc-500">
+      <div className="mt-1 flex justify-between text-[11px] text-on-surface-variant tabular-nums">
         <span>{formatClock(bounds.startSec)}</span>
         <span>{formatClock(bounds.endSec)}</span>
       </div>

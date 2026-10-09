@@ -8,7 +8,6 @@
 
 import type {
   AnalysisResult,
-  AudioTransition,
   BackgroundMusic,
   Clip,
   CompositionSettings,
@@ -16,6 +15,7 @@ import type {
   Look,
   Scenario,
   TimeRange,
+  TranscriptWord,
 } from '../types';
 
 export interface EditorState {
@@ -38,20 +38,35 @@ export type EditorAction =
   | {type: 'selectScenario'; index: number}
   | {type: 'selectClip'; index: number}
   | {type: 'setClipRange'; index: number; range: TimeRange}
+  | {type: 'setClipMute'; index: number; muteAudio: boolean}
+  /** Swaps the Clip at `index` with the one `offset` places away. */
   | {type: 'moveClip'; index: number; offset: number}
+  /** Takes the Clip at `index` out and puts it back at position `to`. */
+  | {type: 'moveClipTo'; index: number; to: number}
   | {type: 'splitClip'; index: number; atSec: number}
   | {type: 'deleteClip'; index: number}
-  | {type: 'addClip'; range: TimeRange}
+  | {type: 'addClip'; range: TimeRange; afterIndex?: number}
+  | {
+      type: 'addMediaClip';
+      mediaKind: 'image' | 'video';
+      assetId: string;
+      range: TimeRange;
+      purpose: string;
+      afterIndex?: number;
+    }
   /** Replaces the Look at `clipId` (null: the shared Look). */
   | {type: 'setLook'; clipId: string | null; look: Look}
   | {type: 'addImage'; clipId: string | null; image: Omit<ImageOverlay, 'overlayId'>}
   /** Gives a Clip its own copy of the shared Look, or drops its own Look. */
   | {type: 'setOwnLook'; index: number; own: boolean}
-  | {type: 'setTransition'; transition: AudioTransition}
   | {type: 'setMusic'; music: BackgroundMusic | null}
   | {type: 'resetScenario'}
   | {type: 'setWordText'; index: number; text: string | null}
-  | {type: 'toggleCutWord'; index: number};
+  | {type: 'setLineWordsText'; wordIndices: readonly number[]; text: string}
+  | {type: 'toggleCutWord'; index: number}
+  /** Cuts (or restores) every word listed; applying it twice changes nothing. */
+  | {type: 'setWordsCut'; wordIndices: readonly number[]; cut: boolean}
+  | {type: 'setCaptionMaxChars'; maxChars: number};
 
 export function createEditorState(
   result: AnalysisResult,
@@ -63,7 +78,7 @@ export function createEditorState(
     scenarios: result.scenarios,
     scenarioIndex: 0,
     clipIndex: 0,
-    cutWords: new Set(result.cutWordIndices),
+    cutWords: new Set<number>(),
     wordText: new Map(),
     settings,
     sourceDurationSec: duration > 0 ? duration : Number.POSITIVE_INFINITY,
@@ -79,6 +94,76 @@ function validRange(state: EditorState, range: TimeRange): TimeRange | null {
   return endSec - startSec >= state.settings.minSubcutSec
     ? {startSec, endSec}
     : null;
+}
+
+function validMediaRange(
+  state: EditorState,
+  mediaKind: 'image' | 'video',
+  range: TimeRange,
+): TimeRange {
+  const minSec = state.settings.minSubcutSec;
+  if (mediaKind === 'image') {
+    const duration = Math.max(minSec, Math.min(60, range.endSec - range.startSec));
+    return {startSec: 0, endSec: duration};
+  }
+  const startSec = Math.max(0, range.startSec);
+  const endSec = Math.max(startSec + minSec, range.endSec);
+  return {startSec, endSec};
+}
+
+/** The value in `values` closest to `target`, or null when there is none. */
+function nearestValue(values: readonly number[], target: number): number | null {
+  let best: number | null = null;
+  for (const value of values) {
+    if (best === null || Math.abs(value - target) < Math.abs(best - target)) {
+      best = value;
+    }
+  }
+  return best;
+}
+
+/**
+ * The range of `clip` after its `edge` is set at `atSec`: a word's start
+ * for 'start', a word's end for 'end'. The transcript panel and 말로 편집
+ * both follow this rule.
+ *
+ * Widening the clip or narrowing it inward moves that edge alone and keeps
+ * the clip at least `minSec` long. A start at or past the clip's end, or an
+ * end at or before its start, moves the whole clip with its length kept so
+ * that it starts (or ends) at `atSec`; the other edge then snaps to the
+ * nearest word edge and stays inside the Source Video.
+ */
+export function clipEdgeRange(input: {
+  clip: TimeRange;
+  edge: 'start' | 'end';
+  atSec: number;
+  words: readonly TranscriptWord[];
+  minSec: number;
+  sourceDurationSec: number;
+}): TimeRange {
+  const {clip, edge, atSec, words, minSec, sourceDurationSec} = input;
+  const length = clip.endSec - clip.startSec;
+  if (edge === 'start') {
+    if (atSec < clip.endSec) {
+      return {startSec: atSec, endSec: Math.max(clip.endSec, atSec + minSec)};
+    }
+    const ends = words
+      .map((word) => word.endSec)
+      .filter((seconds) => seconds >= atSec + minSec);
+    const endSec = nearestValue(ends, atSec + length) ?? atSec + length;
+    return {startSec: atSec, endSec: Math.min(sourceDurationSec, endSec)};
+  }
+  if (atSec > clip.startSec) {
+    return {
+      startSec: Math.max(0, Math.min(clip.startSec, atSec - minSec)),
+      endSec: atSec,
+    };
+  }
+  const starts = words
+    .map((word) => word.startSec)
+    .filter((seconds) => seconds <= atSec - minSec);
+  const startSec = nearestValue(starts, atSec - length) ?? atSec - length;
+  return {startSec: Math.max(0, startSec), endSec: atSec};
 }
 
 function currentScenario(state: EditorState): Scenario {
@@ -117,6 +202,22 @@ function clipAt(clips: readonly Clip[], index: number): Clip | undefined {
   return index >= 0 && index < clips.length ? clips[index] : undefined;
 }
 
+/** Inserts a new `clip` after `afterIndex` (default: the selected Clip) and selects it. */
+function insertClip(
+  state: EditorState,
+  clip: Clip,
+  afterIndex: number | undefined,
+): EditorState {
+  const clips = currentScenario(state).clips;
+  const baseIndex = afterIndex ?? state.clipIndex;
+  const at = clips.length === 0 ? 0 : Math.min(clips.length, Math.max(0, baseIndex + 1));
+  const next = [...clips.slice(0, at), clip, ...clips.slice(at)];
+  return {
+    ...withClips(state, next, at),
+    createdClips: state.createdClips + 1,
+  };
+}
+
 /** The Look at `clipId`, falling back to the shared Look. */
 function lookAt(scenario: Scenario, clipId: string | null): Look {
   return scenario.clips.find((clip) => clip.clipId === clipId)?.look ?? scenario.look;
@@ -146,12 +247,29 @@ export function editorReducer(
     case 'selectClip':
       return {...state, clipIndex: action.index};
     case 'setClipRange': {
-      const range = validRange(state, action.range);
-      if (!range || !clipAt(clips, action.index)) {
+      const target = clipAt(clips, action.index);
+      if (!target) {
+        return state;
+      }
+      const mediaKind = target.mediaKind ?? 'source';
+      const range =
+        mediaKind === 'source'
+          ? validRange(state, action.range)
+          : validMediaRange(state, mediaKind, action.range);
+      if (!range) {
         return state;
       }
       const next = clips.map((item, index) =>
         index === action.index ? {...item, ...range} : item,
+      );
+      return withClips(state, next, action.index);
+    }
+    case 'setClipMute': {
+      if (!clipAt(clips, action.index)) {
+        return state;
+      }
+      const next = clips.map((item, index) =>
+        index === action.index ? {...item, muteAudio: action.muteAudio} : item,
       );
       return withClips(state, next, action.index);
     }
@@ -166,6 +284,16 @@ export function editorReducer(
       next[action.index] = displaced;
       next[target] = moved;
       return withClips(state, next, target);
+    }
+    case 'moveClipTo': {
+      const moved = clipAt(clips, action.index);
+      const to = Math.min(Math.max(0, Math.round(action.to)), clips.length - 1);
+      if (!moved || to === action.index) {
+        return state;
+      }
+      const rest = clips.filter((_, index) => index !== action.index);
+      const next = [...rest.slice(0, to), moved, ...rest.slice(to)];
+      return withClips(state, next, to);
     }
     case 'splitClip': {
       const clip = clipAt(clips, action.index);
@@ -205,13 +333,25 @@ export function editorReducer(
         speaker: '',
         purpose: '',
         look: null,
+        mediaKind: 'source',
+        assetId: null,
+        muteAudio: false,
       };
-      const at = clips.length === 0 ? 0 : state.clipIndex + 1;
-      const next = [...clips.slice(0, at), clip, ...clips.slice(at)];
-      return {
-        ...withClips(state, next, at),
-        createdClips: state.createdClips + 1,
+      return insertClip(state, clip, action.afterIndex);
+    }
+    case 'addMediaClip': {
+      const range = validMediaRange(state, action.mediaKind, action.range);
+      const clip: Clip = {
+        clipId: newClipId(state),
+        ...range,
+        speaker: action.mediaKind === 'image' ? '이미지' : '외부 영상',
+        purpose: action.purpose,
+        look: null,
+        mediaKind: action.mediaKind,
+        assetId: action.assetId,
+        muteAudio: false,
       };
+      return insertClip(state, clip, action.afterIndex);
     }
     case 'setLook':
       return withLook(state, action.clipId, action.look);
@@ -236,12 +376,6 @@ export function editorReducer(
       const next = clips.map((item, index) => (index === action.index ? {...item, look} : item));
       return withClips(state, next, action.index);
     }
-    case 'setTransition':
-      return withScenario(
-        state,
-        {...currentScenario(state), audioTransition: action.transition},
-        state.clipIndex,
-      );
     case 'setMusic':
       return withScenario(
         state,
@@ -259,12 +393,51 @@ export function editorReducer(
       }
       return {...state, wordText};
     }
+    case 'setLineWordsText': {
+      const {wordIndices, text} = action;
+      if (wordIndices.length === 0) {
+        return state;
+      }
+      const tokens = text.split(/\s+/).filter(Boolean);
+      const wordText = new Map(state.wordText);
+      const cutWords = new Set(state.cutWords);
+      wordIndices.forEach((wordIndex, idx) => {
+        cutWords.delete(wordIndex);
+        const last = idx === wordIndices.length - 1;
+        wordText.set(wordIndex, last ? tokens.slice(idx).join(' ') : (tokens[idx] ?? ''));
+      });
+      return {...state, wordText, cutWords};
+    }
     case 'toggleCutWord': {
       const cutWords = new Set(state.cutWords);
       if (!cutWords.delete(action.index)) {
         cutWords.add(action.index);
       }
       return {...state, cutWords};
+    }
+    case 'setWordsCut': {
+      const changes = action.wordIndices.filter(
+        (index) => state.cutWords.has(index) !== action.cut,
+      );
+      if (changes.length === 0) {
+        return state;
+      }
+      const cutWords = new Set(state.cutWords);
+      for (const index of changes) {
+        if (action.cut) {
+          cutWords.add(index);
+        } else {
+          cutWords.delete(index);
+        }
+      }
+      return {...state, cutWords};
+    }
+    case 'setCaptionMaxChars': {
+      const maxChars = Math.max(4, Math.min(40, Math.round(action.maxChars)));
+      return {
+        ...state,
+        settings: {...state.settings, captionMaxChars: maxChars},
+      };
     }
     default: {
       const unhandled: never = action;

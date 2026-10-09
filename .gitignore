@@ -1,24 +1,76 @@
-# Python-generated files
+# Python-generated files & caches
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Virtual environments & caches
-.venv
+# Virtual environments & package managers
+.venv/
+.uv/
+
+# Frontend / Node / Vite
+node_modules/
 .vite/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Credentials & secrets
+# Environment & credentials (keep secrets local)
+.env
+.env.*
+!.env.example
+*.local
 client_secret*.json
 *.secret.json
+credentials.json
 token.json
-.env
 
-# Local media files
+# Local workspace scratch & media files
+workdir/
+tmp/
+.studio/
 *.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flac
+*.wav
+*.mp3
+*.aac
+*.m4a
+*.ass
+*.srt
 
+# Terraform (local state, provider plugins, per-machine vars)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

@@ -11,7 +11,6 @@ import functools
 import os
 import pathlib
 import shutil
-import sys
 import tempfile
 
 import dotenv
@@ -44,26 +43,37 @@ COMPOSITION = models.CompositionSettings(
     new_clip_sec=6.0,
     edit_window_pad_sec=8.0,
     nudge_steps_sec=[0.1, 0.5],
-    duration_tolerance_sec=1.5,
     default_music_volume=0.25,
     music_fade_out_sec=1.5,
     default_image_width_ratio=0.3,
 )
 
-RENDER_PROFILES: dict[str, models.RenderProfile] = {
-    'preview': models.RenderProfile(
-        width=540,
-        height=960,
-        x264_preset='veryfast',
-        crf=26,
-        audio_bitrate='128k',
-    ),
-    'final': models.RenderProfile(
+# Output presets of "MP4 만들기" (9:16 vertical short).
+# In 'box' mode on a 1080x1920 canvas, a 16:9 box is only 1048x588 (588p).
+# Rendering at 1440x2560 (QHD, box 1396x786) or 2160x3840 (4K UHD, box
+# 2096x1178) preserves the horizontal detail of 1080p/4K source videos, and
+# crf 14-15 prevents bitrate starvation on the surrounding dark canvas.
+RENDER_PROFILES: dict[models.RenderQuality, models.RenderProfile] = {
+    '1080p': models.RenderProfile(
         width=1080,
         height=1920,
-        x264_preset='medium',
-        crf=19,
-        audio_bitrate='192k',
+        x264_preset='fast',
+        crf=14,
+        audio_bitrate='256k',
+    ),
+    '1440p': models.RenderProfile(
+        width=1440,
+        height=2560,
+        x264_preset='faster',
+        crf=14,
+        audio_bitrate='256k',
+    ),
+    '2160p': models.RenderProfile(
+        width=2160,
+        height=3840,
+        x264_preset='veryfast',
+        crf=15,
+        audio_bitrate='320k',
     ),
 }
 
@@ -88,20 +98,29 @@ class Settings:
   heartbeat_sec: float
   workdir: pathlib.Path
   retention_hours: float
-  ytdlp_command: tuple[str, ...]
+  # Cloud Storage bucket that mirrors the Workspace (uploads, proxies,
+  # transcripts, renders). Empty keeps everything on the local disk only.
+  gcs_bucket: str
   ffmpeg_bin: str
   ffprobe_bin: str
   subprocess_timeout_sec: float
-  http_timeout_sec: float
-  caption_fetch_attempts: int
-  caption_retry_delay_sec: float
   silence_noise_db: float
   silence_min_sec: float
-  alignment_tolerance_sec: float
   # Uploaded Source Videos are sent to Gemini inline as a small proxy.
   analysis_proxy_height: int
   analysis_proxy_fps: float
   max_inline_video_bytes: int
+  # How long the Gemini Context Cache of an analysis proxy lives.
+  context_cache_ttl_sec: int
+  # Google Cloud Speech-to-Text V2 (chirp_3 in the us multi-region).
+  speech_project: str
+  speech_location: str
+  speech_model: str
+  speech_languages: tuple[str, ...]
+  # Google / YouTube OAuth 2.0 Web Client credentials.
+  oauth_client_id: str
+  oauth_client_secret: str
+  oauth_setup_error: str
   template_style: models.TemplateStyle
   font_warning: str
   backend_port: int
@@ -154,26 +173,25 @@ def _gemini_setup_error(
   return ''
 
 
+def _oauth_setup_error(client_id: str, client_secret: str) -> str:
+  """Returns what must be configured before Google / YouTube OAuth works."""
+  if client_id and client_secret:
+    return ''
+  return (
+      'GOOGLE_OAUTH_CLIENT_ID와 GOOGLE_OAUTH_CLIENT_SECRET이 설정되지 '
+      '않았습니다. Google Cloud Console > APIs & Services > Credentials에서 '
+      'OAuth 2.0 웹 클라이언트를 만들고 승인된 리디렉션 URI에 '
+      '<사이트 주소>/api/shortform/auth/callback을 추가한 뒤 .env에 값을 '
+      '넣고 서버를 다시 시작하세요.'
+  )
+
+
 def _model_chain() -> tuple[str, ...]:
   primary = _env_str(
       'GEMINI_SHORTFORM_MODEL', _env_str('GEMINI_MODEL', DEFAULT_MODEL_CHAIN[0])
   )
   fallbacks = _env_list('GEMINI_FALLBACK_MODELS') or DEFAULT_MODEL_CHAIN
   return tuple(dict.fromkeys((primary, *fallbacks)))
-
-
-def _ytdlp_command() -> tuple[str, ...]:
-  sibling = pathlib.Path(sys.executable).with_name('yt-dlp')
-  if sibling.exists():
-    base: tuple[str, ...] = (str(sibling),)
-  elif found := shutil.which('yt-dlp'):
-    base = (found,)
-  else:
-    base = (sys.executable, '-m', 'yt_dlp')
-  runtime = _env_str('YTDLP_JS_RUNTIME', 'node')
-  if shutil.which(runtime):
-    return (*base, '--js-runtimes', runtime)
-  return base
 
 
 def _font_warning() -> str:
@@ -218,6 +236,8 @@ def get_settings() -> Settings:
   backend = _gemini_backend()
   api_key = os.environ.get('GEMINI_API_KEY', '').strip()
   project = os.environ.get('GOOGLE_CLOUD_PROJECT', '').strip()
+  oauth_client_id = _env_str('GOOGLE_OAUTH_CLIENT_ID', '')
+  oauth_client_secret = _env_str('GOOGLE_OAUTH_CLIENT_SECRET', '')
   return Settings(
       gemini_backend=backend,
       gemini_api_key=api_key,
@@ -238,20 +258,12 @@ def get_settings() -> Settings:
           )
       ),
       retention_hours=_env_float('STUDIO_RETENTION_HOURS', 24.0),
-      ytdlp_command=_ytdlp_command(),
+      gcs_bucket=_env_str('STUDIO_GCS_BUCKET', ''),
       ffmpeg_bin=_env_str('FFMPEG_BIN', shutil.which('ffmpeg') or 'ffmpeg'),
       ffprobe_bin=_env_str('FFPROBE_BIN', shutil.which('ffprobe') or 'ffprobe'),
       subprocess_timeout_sec=_env_float('STUDIO_SUBPROCESS_TIMEOUT_SEC', 900.0),
-      http_timeout_sec=_env_float('STUDIO_HTTP_TIMEOUT_SEC', 20.0),
-      caption_fetch_attempts=max(
-          1, int(_env_float('STUDIO_CAPTION_FETCH_ATTEMPTS', 3))
-      ),
-      caption_retry_delay_sec=_env_float(
-          'STUDIO_CAPTION_RETRY_DELAY_SEC', 2.0
-      ),
       silence_noise_db=_env_float('STUDIO_SILENCE_NOISE_DB', -35.0),
       silence_min_sec=_env_float('STUDIO_SILENCE_MIN_SEC', 0.1),
-      alignment_tolerance_sec=_env_float('STUDIO_ALIGNMENT_TOLERANCE_SEC', 1.0),
       analysis_proxy_height=int(
           _env_float('STUDIO_ANALYSIS_PROXY_HEIGHT', 360)
       ),
@@ -260,17 +272,28 @@ def get_settings() -> Settings:
       max_inline_video_bytes=int(
           _env_float('STUDIO_MAX_INLINE_VIDEO_MB', 100.0) * 1024 * 1024
       ),
+      context_cache_ttl_sec=int(
+          _env_float('STUDIO_CONTEXT_CACHE_TTL_SEC', 3600)
+      ),
+      speech_project=_env_str('STUDIO_SPEECH_PROJECT', project),
+      speech_location=_env_str('STUDIO_SPEECH_LOCATION', 'us'),
+      speech_model=_env_str('STUDIO_SPEECH_MODEL', 'chirp_3'),
+      speech_languages=_env_list('STUDIO_SPEECH_LANGUAGES') or ('auto',),
+      oauth_client_id=oauth_client_id,
+      oauth_client_secret=oauth_client_secret,
+      oauth_setup_error=_oauth_setup_error(
+          oauth_client_id, oauth_client_secret
+      ),
       template_style=models.TemplateStyle(
           canvas_width=1080,
           canvas_height=1920,
           box_side_margin=16,
           box_aspect_ratio=16 / 9,
           box_center_y=960,
-          box_corner_radius=56,
           headline_line_gap=16,
           headline_gap=60,
           text_box_padding=12,
-          caption_bottom_inset=36,
+          caption_gap=104,
           caption_side_padding=40,
           full_headline_y=480,
           full_caption_y=1480,
