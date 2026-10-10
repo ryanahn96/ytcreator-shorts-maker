@@ -1,11 +1,11 @@
 /**
  * The editor of one analysis. The header holds the Shorts tabs, the cost
  * and time of the analysis and the actions, with undo and redo; the body
- * has the clips on the left, the pinned preview with 말로 편집 (Edit Agent)
- * under it in the middle and the 자막 · 스타일 · 소리 tabs on the right
- * (layout in index.css). Every edit, by hand or by Edit Request, resolves
- * on the client (lib/timeline.ts) and feeds the preview and the MP4 render
- * at once; lib/history.ts keeps the undo steps.
+ * has the clips on the left, the pinned preview in the middle and the
+ * 자막 · 스타일 · 소리 tabs on the right (layout in index.css), and 말로
+ * 편집 (Edit Agent) floats at the bottom right. Every edit, by hand or by
+ * Edit Request, resolves on the client (lib/timeline.ts) and feeds the
+ * preview and the MP4 render at once; lib/history.ts keeps the undo steps.
  */
 
 import {
@@ -831,6 +831,7 @@ export function EditorScreen(props: {
       status: 'pending',
       request: text,
       reply: '',
+      speech: '',
       operations: [],
       stepId: null,
       notes: [],
@@ -874,6 +875,7 @@ export function EditorScreen(props: {
         updateEntry(entryId, {
           status: 'done',
           reply: applied.reply,
+          speech: applied.speech,
           operations: response.operations,
           notes: [...response.notes, ...applied.notes],
           stepId,
@@ -1023,16 +1025,6 @@ export function EditorScreen(props: {
                   onLookEdit={onLookEdit}
                   onFocus={onStageFocus}
                 />
-                <EditAgentBar
-                  entries={agentEntries}
-                  lastStepId={history.done.at(-1)?.id ?? null}
-                  reverted={history.reverted}
-                  onSend={(text) => sendEdit(text)}
-                  onStop={stopEdit}
-                  onRetry={retryEdit}
-                  onUndo={undo}
-                  onListen={() => commandPreview({kind: 'pause'})}
-                />
               </Card>
             </div>
             <div className="editor-tabs">
@@ -1116,6 +1108,19 @@ export function EditorScreen(props: {
           onQualityChange={setRenderQuality}
           onRender={render}
           onClose={() => setExportOpen(false)}
+        />
+      )}
+      {scenario && (
+        <EditAgentBar
+          entries={agentEntries}
+          lastStepId={history.done.at(-1)?.id ?? null}
+          reverted={history.reverted}
+          previewPlaying={playbackState.playing}
+          onSend={(text) => sendEdit(text)}
+          onStop={stopEdit}
+          onRetry={retryEdit}
+          onUndo={undo}
+          onPausePreview={() => commandPreview({kind: 'pause'})}
         />
       )}
     </div>

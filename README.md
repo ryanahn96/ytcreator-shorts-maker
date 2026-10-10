@@ -4,7 +4,7 @@
 영상 파일을 올리면 Gemini가 영상을 보고 9:16 Shorts 여러 개를 제안합니다. 내 채널에 이미
 올라간 영상과 연결하면 YouTube Analytics 시청자 유지율(Audience Retention) 피크 구간과
 공식 자막을 함께 반영하고, 브라우저에서 다듬은 뒤 1080×1920 MP4로 내려받거나 내 YouTube
-채널에 바로 업로드합니다. 원본 음성만 쓰고 TTS는 없습니다.
+채널에 바로 업로드합니다. Shorts에는 원본 음성만 쓰고 TTS 내레이션은 넣지 않습니다.
 
 - 로그인 (Google / YouTube OAuth 2.0): Cloud Run IAP 대신 앱 자체 OAuth 2.0 로그인을
   씁니다. 어떤 Google / YouTube 계정이든 본인 채널 권한으로 로그인할 수 있고, 헤더에
@@ -24,12 +24,15 @@
   끝점, 나누기, 단어 삭제, 자막 수정), 클립 추가·나누기·순서·삭제, 클립별 스타일, 줄 수
   제한 없는 헤드라인, 글자·이미지 드래그, 글꼴 10종, 배경음악. 미리보기에서
   헤드라인·자막·이미지를 누르면 오른쪽 패널이 그 항목으로 바로 옮겨 갑니다.
-- 말로 편집: 미리보기 아래 입력창에 "헤드라인을 노란색으로 크게", "2번 클립을 3초 줄여 줘"처럼
-  입력하거나 마이크로 말하면, Gemini가 보고 있는 Shorts의 편집 동작으로 바꾸고 브라우저가 한
-  번에 적용합니다(영상은 다시 보내지 않음). 답은 한 줄로 보이고 "되돌리기"로 바로 취소할 수
-  있습니다. 마이크는 브라우저의 Web Speech API(ko-KR)를 쓰며, 지원하지 않는 브라우저에서는
-  보이지 않습니다. 헤더의 실행 취소·다시 실행(Ctrl/⌘+Z, Ctrl/⌘+Shift+Z)은 손 편집과 말로
-  편집을 함께 100단계까지 기억합니다.
+- 말로 편집: 편집 화면 오른쪽 아래에 떠 있는 창에 "헤드라인을 노란색으로 크게", "2번 클립을
+  3초 줄여 줘"처럼 입력하거나 마이크로 말하면, Gemini(생각 수준 LOW)가 보고 있는 Shorts의 편집
+  동작으로 바꾸고 브라우저가 한 번에 적용합니다(영상은 다시 보내지 않음). 답과 참고 사항은 줄임
+  없이 글로 다 보이고, 동시에 Gemini TTS(`gemini-3.8-flash-lite-tts`, 실패하면
+  `gemini-3.8-flash-tts`, 목소리 Kore)가 소리 내어 읽습니다. 읽는 동안 미리보기는 멈추고, 창에서
+  음성 읽기를 끄거나 멈출 수 있습니다. "되돌리기"로 바로 취소할 수 있고, 창은 작은 버튼으로 접어
+  둘 수 있습니다. 마이크는 브라우저의 Web Speech API(ko-KR)를 쓰며, 지원하지 않는 브라우저에서는
+  보이지 않습니다. 헤더의 실행 취소·다시 실행(Ctrl/⌘+Z, Ctrl/⌘+Shift+Z)은 손 편집과 말로 편집을
+  함께 100단계까지 기억합니다.
 - 렌더 및 YouTube 업로드: 올린 원본으로 ffmpeg가 1080×1920 MP4를 만듭니다. 내보내기
   창에서 MP4 파일을 내려받거나 제목·설명·공개 상태(비공개/일부 공개/공개)를 정해 내
   YouTube 채널에 Shorts로 바로 올릴 수 있습니다.
@@ -46,7 +49,7 @@
 | 로그인 | Google / YouTube 계정 OAuth 2.0 로그인 |
 | 시작 | 영상 파일을 끌어다 놓거나 선택합니다. 내 채널 영상을 연결해 시청자 유지율 피크와 공식 자막을 미리 볼 수 있습니다. 올리기가 끝나면 "Shorts 만들기" |
 | 분석 중 | 진행 상태 한 줄, 경과 시간, Gemini 생각 요약 한 줄, 중단 |
-| 편집 | 헤더에 Shorts 탭, 비용과 시간, 실행 취소·다시 실행, 다시 분석, 새 영상, 채널 프로필·로그아웃, 내보내기(MP4 다운로드 + YouTube Shorts 업로드). 왼쪽 클립(시청 유지율 배지·곡선), 가운데 고정 미리보기와 그 아래 말로 편집 입력창, 오른쪽 자막·스타일·소리 탭 |
+| 편집 | 헤더에 Shorts 탭, 비용과 시간, 실행 취소·다시 실행, 다시 분석, 새 영상, 채널 프로필·로그아웃, 내보내기(MP4 다운로드 + YouTube Shorts 업로드). 왼쪽 클립(시청 유지율 배지·곡선), 가운데 고정 미리보기, 오른쪽 자막·스타일·소리 탭, 오른쪽 아래에 떠 있는 말로 편집 창 |
 
 테마는 처음에 기기 설정을 따릅니다. 헤더 메뉴에서 시스템, 라이트, 다크를 고르면 브라우저에
 저장됩니다.
@@ -66,7 +69,8 @@
 | `yt/studio/prompts.py` | 기본 Shorts 생성 프롬프트, 첫 분석·빠른 재분석·화면 재탐색 요청문(시청자 유지율 피크 포함), Gemini 응답 스키마 |
 | `yt/studio/gemini.py` | API 키 또는 Vertex AI 클라이언트, ADC 토큰 확인 |
 | `yt/studio/director.py` | Gemini AGENTIC 호출, Context Cache 생성·재사용, 전체 자막 및 YouTube 컨텍스트 보관, 모델 대체 순서, 재시도, 응답 검증, 토큰 집계 |
-| `yt/studio/edit_agent.py` | 말로 편집: 편집 요청과 보고 있는 Shorts, 보관한 전체 자막·시청 유지율로 Gemini(텍스트만)에 편집 동작을 묻고, 동작을 검사해 범위 밖 값은 맞추거나 건너뛴 뒤 답 한 줄과 함께 돌려줌 |
+| `yt/studio/edit_agent.py` | 말로 편집: 편집 요청과 보고 있는 Shorts, 보관한 전체 자막·시청 유지율로 Gemini(텍스트만, 생각 수준 LOW)에 편집 동작을 묻고, 동작을 검사해 범위 밖 값은 맞추거나 건너뛴 뒤 답 한 줄, 소리 내어 읽을 답과 함께 돌려줌 |
+| `yt/studio/tts.py` | 말로 편집의 답을 Gemini TTS로 읽은 오디오(WAV). `gemini-3.8-flash-lite-tts`가 실패하면 `gemini-3.8-flash-tts`, 목소리 Kore |
 | `yt/studio/pricing.py` | 모델별 정가표(확인 날짜와 출처 포함), 호출 비용과 캐시 쓰기 비용 계산 |
 | `yt/studio/layout.py` | 템플릿 기하(영상 박스, 크롭, 글자 기본 위치: 헤드라인은 박스 위, 자막은 박스 아래) |
 | `yt/studio/composer.py` | 클라이언트가 보낸 Subcut을 프레임 단위로 맞춘 타임라인(하드 컷), ffmpeg 필터 그래프, ASS 생성 |
@@ -88,7 +92,8 @@
 | POST | `/api/shortform/upload-source` | 원본 영상 업로드, 길이와 무음 구간 측정 |
 | POST | `/api/shortform/upload-asset` | 이미지나 배경음악 업로드 |
 | POST | `/api/shortform/analyze` | 분석. `mode`는 `fast`(보관한 자막만) 또는 `deep`(영상 다시 보기); 첫 분석은 항상 영상을 봅니다. NDJSON 스트림(진행 상황, 하트비트, 결과 또는 오류) |
-| POST | `/api/shortform/edit` | 말로 편집. 편집 요청 하나와 보고 있는 Shorts 상태를 받아 검사한 편집 동작, 답 한 줄, 참고 사항을 돌려줌. 브라우저가 연결을 끊으면(중단) Gemini 호출도 취소 |
+| POST | `/api/shortform/edit` | 말로 편집. 편집 요청 하나와 보고 있는 Shorts 상태를 받아 검사한 편집 동작, 답 한 줄, 소리 내어 읽을 답, 참고 사항을 돌려줌. 브라우저가 연결을 끊으면(중단) Gemini 호출도 취소 |
+| POST | `/api/shortform/tts` | 말로 편집의 답을 Gemini TTS로 읽은 WAV. 브라우저가 연결을 끊으면(읽기 멈추기, 새 요청) 호출도 취소 |
 | POST | `/api/shortform/render` | 1080×1920 MP4 렌더 |
 | GET | `/api/shortform/renders/{render_id}` | 렌더된 MP4 |
 
@@ -101,7 +106,7 @@
 | `components/ReanalyzeDialog.tsx`, `ExportDialog.tsx` | 다시 분석, 내보내기(MP4 다운로드 + YouTube Shorts 직접 업로드) 대화상자 |
 | `components/` 나머지 | 클립 편집기(시청 유지율 피크 배지·곡선), 자막 패널, 스타일과 소리 설정, 크리에이터 배지, 테마 메뉴, 공통 UI(`ui.tsx`, `Icon.tsx`) |
 | `components/preview/` | canvas 9:16 미리보기, 글자와 이미지 드래그 |
-| `components/EditAgentBar.tsx`, `hooks/useSpeechInput.ts`, `lib/editAgent.ts` | 말로 편집: 입력창, 마이크(Web Speech, ko-KR), 답 한 줄과 지난 대화, 편집 요청 만들기, 답의 편집 동작을 그 순간의 편집 상태에 적용 |
+| `components/EditAgentBar.tsx`, `hooks/useSpeechInput.ts`, `hooks/useReplyVoice.ts`, `lib/editAgent.ts` | 말로 편집: 오른쪽 아래에 떠 있는 창(접기·펼치기), 마이크(Web Speech, ko-KR), 답과 참고 사항 전체와 지난 대화, 답 읽기(Gemini TTS 오디오를 Web Audio로 재생, 켜기·끄기와 멈추기), 편집 요청 만들기, 답의 편집 동작을 그 순간의 편집 상태에 적용 |
 | `lib/history.ts` | 실행 취소·다시 실행 (손 편집과 말로 편집 공통, 100단계) |
 | `hooks/` | 분석 스트림, 업로드, 점프컷 재생, 배경음악 동기화, 테마 |
 | `lib/` | API 클라이언트, 타임라인 계산, 프레이밍, 편집 리듀서, 표시 형식 |

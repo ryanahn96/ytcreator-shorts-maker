@@ -277,16 +277,18 @@ dialog[open] {
  * From 1024px the preview gets its own column and stays pinned under the
  * header while the clips and tabs scroll; from 1280px the tabs move to a
  * third column. --preview-w sizes the 9:16 frame so the whole preview card
- * (the frame, the transport and the 말로 편집 bar under it) fits under the
- * header, ending 1rem above the bottom of the screen; the editor's bottom
- * padding is also 1rem so the pinned card is never pushed under the header
- * at the end of the page.
+ * (the frame and the transport under it, --preview-chrome with the gaps)
+ * fits under the header, ending 1rem above the bottom of the screen; the
+ * editor's bottom padding is also 1rem so the pinned card is never pushed
+ * under the header at the end of the page. 말로 편집 floats at the bottom
+ * right (EditAgentBar), and the tabs end with room for it.
  */
 .editor-grid {
   --header-h: 4rem;
+  --preview-chrome: 10rem;
   --preview-w: min(
     420px,
-    max(240px, calc((100dvh - var(--header-h) - 16rem) * 9 / 16))
+    max(240px, calc((100dvh - var(--header-h) - var(--preview-chrome)) * 9 / 16))
   );
   display: grid;
   gap: 1rem;
@@ -312,8 +314,11 @@ dialog[open] {
   width: min(100%, calc(var(--preview-w) + 2rem));
 }
 
+/* EditAgentBar sets --edit-agent-space to its height plus a gap, so the
+   last tool can always scroll out from under the widget. */
 .editor-tabs {
   grid-area: tabs;
+  padding-bottom: var(--edit-agent-space, 0px);
 }
 
 @media (min-width: 1024px) {
@@ -329,6 +334,14 @@ dialog[open] {
     justify-self: stretch;
     position: sticky;
     top: calc(var(--header-h) + 1rem);
+  }
+}
+
+/* Two columns: 말로 편집 floats under the pinned preview, so the frame
+   leaves room for the folded widget or its input. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .editor-grid {
+    --preview-chrome: 17rem;
   }
 }
 

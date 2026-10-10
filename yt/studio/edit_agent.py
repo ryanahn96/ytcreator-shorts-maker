@@ -1,15 +1,17 @@
 """말로 편집 (Edit Agent): turns one Edit Request into edit operations.
 
-One Edit Request is one Gemini call with structured output (ADR 0011). The
-browser sends the Shorts on screen, the selected Clip, the playhead and the
-conversation of this editor session; the server adds the stored full
-transcript with word numbers, the audience data, the uploaded files and the
-bundled fonts. Gemini answers with a list of edit operations and a one-line
-reply. check_answer validates every operation against the state that was
-sent and the limits of the render models: out-of-range values move to the
-nearest allowed value, operations it does not know are dropped, and what it
-changed or skipped is reported as Korean notes. The browser then applies
-the operations as one undo step (frontend/src/lib/editAgent.ts).
+One Edit Request is one Gemini call with structured output and LOW
+thinking (ADR 0011). The browser sends the Shorts on screen, the selected
+Clip, the playhead and the conversation of this editor session; the server
+adds the stored full transcript with word numbers, the audience data, the
+uploaded files and the bundled fonts. Gemini answers with a list of edit
+operations, a one-line reply and the same reply written to be heard
+(speech, read aloud by tts.py). check_answer validates every operation
+against the state that was sent and the limits of the render models:
+out-of-range values move to the nearest allowed value, operations it does
+not know are dropped, and what it changed or skipped is reported as Korean
+notes. The browser then applies the operations as one undo step
+(frontend/src/lib/editAgent.ts).
 
 Clips are named by their Clip Number on screen when the request was sent;
 the browser maps those numbers back to Clip ids, so this module never needs
@@ -67,13 +69,17 @@ _WORD_OPS = frozenset(
     {'setWordText', 'setLineText', 'resetWordText', 'cutWords', 'restoreWords'}
 )
 _KIND_LABELS = {'image': '이미지', 'audio': '음악', 'video': '영상'}
+# On 25 test requests (2026-10-09) LOW thinking gave the same verdicts as
+# the model default at a median 3.3 s instead of 7.6 s per answer.
+_THINKING = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
 
 SYSTEM_INSTRUCTION = """\
 당신은 세로 Shorts 편집기의 '말로 편집' 도우미입니다. 사용자가 말이나 글로 \
 건넨 편집 요청 하나를 알아듣고, 지금 보고 있는 Shorts 하나의 편집 값을 \
-바꾸는 편집 동작 목록(operations)과 한 줄 답장(reply)을 돌려줍니다. \
-브라우저는 받은 동작을 바로 한 단계로 적용하고, 사용자는 되돌리기로 언제든 \
-취소할 수 있습니다.
+바꾸는 편집 동작 목록(operations)과 한 줄 답장(reply), 그 답장을 소리 내어 \
+읽을 문장(speech)을 돌려줍니다. 브라우저는 받은 동작을 바로 한 단계로 \
+적용하고 답장을 화면에 보이며 speech를 읽어 줍니다. 사용자는 되돌리기로 \
+언제든 취소할 수 있습니다.
 
 [할 수 있는 일]
 - 사람이 편집 화면에서 손으로 바꿀 수 있는 값은 모두 바꿉니다: 클립 구간, \
@@ -158,6 +164,10 @@ y를 줄이고 "오른쪽으로"는 x를 늘립니다.
 해석이 필요했으면 어떻게 해석했는지 적습니다.
 - reply는 "바꿨어요", "없어요"처럼 해요체로 끝냅니다. "~습니다", \
 "~입니다"로 끝내지 않습니다.
+- speech는 reply를 소리 내어 읽을 문장입니다. 내용은 reply와 같고 해요체로 \
+끝내되, 색 코드(#FFFF00), 화살표(→), 괄호, 단어 번호([45]) 같은 기호 없이 \
+"헤드라인을 노란색으로 바꿨어요"처럼 말로 풀어 씁니다. reply보다 길게 \
+쓰지 않습니다.
 - 시청자 데이터를 근거로 들 때는 적힌 초와 수치를 그대로 옮깁니다. 적혀 \
 있지 않은 시각이나 댓글은 지어내지 않습니다.
 - 질문은 되물을 때만 합니다.
@@ -249,6 +259,8 @@ class EditResponse(models.StudioModel):
   """The checked operations of one Edit Request and the reply to show."""
 
   reply: str
+  # The reply written to be heard, for Gemini TTS (tts.py).
+  speech: str = ''
   operations: list[dict[str, Any]]
   # Values the server moved into range and operations it skipped.
   notes: list[str] = pydantic.Field(default_factory=list)
@@ -1511,6 +1523,11 @@ class _Checker:
   }
 
 
+def _one_line(value: Any) -> str:
+  """Puts a reply on one line and cuts it to the allowed length."""
+  return ' '.join(director.clean_text(value).split())[:_MAX_REPLY_CHARS]
+
+
 def check_answer(
     data: dict[str, Any],
     request: EditRequest,
@@ -1519,13 +1536,13 @@ def check_answer(
   """Validates Gemini's answer to an Edit Request.
 
   Args:
-    data: The answer JSON: operations and reply.
+    data: The answer JSON: operations, reply and speech.
     request: The Edit Request with the state it was sent from.
     transcript: The stored full transcript; None when there is none.
 
   Returns:
-    The operations the browser can apply as they are, the one-line reply
-    and notes on what was adjusted or skipped.
+    The operations the browser can apply as they are, the one-line reply,
+    the reply to read aloud and notes on what was adjusted or skipped.
   """
   checker = _Checker(request, transcript)
   raw = director.as_list(data.get('operations'))
@@ -1534,21 +1551,25 @@ def check_answer(
         f'동작이 너무 많아 앞의 {_MAX_OPERATIONS}개만 적용했어요.'
     )
   operations = checker.check(raw[:_MAX_OPERATIONS])
-  reply = ' '.join(director.clean_text(data.get('reply')).split())[
-      :_MAX_REPLY_CHARS
-  ]
+  reply, speech = _one_line(data.get('reply')), _one_line(data.get('speech'))
   if raw and not operations:
     # The reply describes edits that were all dropped; it would mislead.
-    reply = '요청한 편집을 적용하지 못했어요.'
+    # The notes are read aloud after the speech, so it leaves them out.
+    speech = reply = '요청한 편집을 적용하지 못했어요.'
     if checker.notes:
       reply += f' {checker.notes[0]}'
   elif not reply:
-    reply = (
+    speech = reply = (
         '요청한 편집을 적용했어요.'
         if operations
         else '바꿀 수 있는 편집을 찾지 못했어요.'
     )
-  return EditResponse(reply=reply, operations=operations, notes=checker.notes)
+  return EditResponse(
+      reply=reply,
+      speech=speech or reply,
+      operations=operations,
+      notes=checker.notes,
+  )
 
 
 # --------------------------------------------------------------------------
@@ -2079,7 +2100,8 @@ def response_schema() -> dict[str, Any]:
   that operation uses are filled in (see SYSTEM_INSTRUCTION). The fields
   are declared in one order that agrees with every field list of the
   instruction, and the decoder keeps it (see _properties). operations
-  comes before reply so the reply is written after the edits.
+  comes before reply so the reply is written after the edits, and speech
+  comes last because it retells the reply.
   """
   number = {'type': 'number'}
   integer = {'type': 'integer'}
@@ -2116,8 +2138,9 @@ def response_schema() -> dict[str, Any]:
   answer = _properties(
       operations={'type': 'array', 'items': operation},
       reply={'type': 'string'},
+      speech={'type': 'string'},
   )
-  answer['required'] = ['operations', 'reply']
+  answer['required'] = ['operations', 'reply', 'speech']
   return answer
 
 
@@ -2158,7 +2181,7 @@ async def run(
   """Answers one Edit Request with checked edit operations.
 
   The call uses the analysis model chain with its retries and fallbacks,
-  text only.
+  text only, with LOW thinking.
 
   Args:
     request: The Edit Request with the state it was sent from.
@@ -2166,7 +2189,7 @@ async def run(
     context: The linked YouTube data, if any.
 
   Returns:
-    The checked operations, the reply and notes.
+    The checked operations, the reply, its spoken form and notes.
 
   Raises:
     director.DirectorError: If Gemini is not set up or every call fails.
@@ -2176,5 +2199,7 @@ async def run(
     raise director.DirectorError(settings.gemini_setup_error)
   client = gemini.make_client(settings)
   job = _EditJob(request=request, transcript=transcript, context=context)
-  answer = await director.run_gemini(client, job, None, _ignore)
+  answer = await director.run_gemini(
+      client, job, None, _ignore, thinking=_THINKING
+  )
   return check_answer(answer.data, request, transcript)

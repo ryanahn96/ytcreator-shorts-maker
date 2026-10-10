@@ -128,6 +128,19 @@ export function editShorts(body: EditRequest, signal: AbortSignal): Promise<Edit
   return requestJson<EditResponse>('/edit', jsonInit(body, signal));
 }
 
+/**
+ * Reads a 말로 편집 answer aloud with the server's Gemini TTS and resolves
+ * with the audio file (WAV). Aborting `signal` stops waiting and rejects
+ * with an AbortError.
+ */
+export async function speakText(text: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  const response = await send('/tts', jsonInit({text}, signal));
+  if (!response.ok) {
+    throw failure(parseJson(await response.text(), response.status), response.status);
+  }
+  return response.arrayBuffer();
+}
+
 function parseEvent(line: string): AnalyzeEvent {
   const event = parseJson(line, 200);
   if (!isRecord(event) || typeof event['type'] !== 'string') {

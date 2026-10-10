@@ -37,6 +37,7 @@ from yt.studio import layout
 from yt.studio import models
 from yt.studio import prompts
 from yt.studio import storage
+from yt.studio import tts
 from yt.studio import youtube
 
 app = fastapi.FastAPI(title='Agentic Shorts 생성 스튜디오 API')
@@ -45,7 +46,8 @@ _workspace = storage.Workspace(
     _settings.workdir, _settings.retention_hours, _settings.gcs_bucket
 )
 _SESSION_MAX_AGE_SEC = int(_settings.retention_hours * 3600)
-# How often an Edit Request checks whether the browser stopped waiting.
+# How often an Edit Request or its TTS call checks whether the browser
+# stopped waiting.
 _DISCONNECT_POLL_SEC = 0.5
 
 
@@ -328,6 +330,15 @@ async def analyze(
   )
 
 
+async def _finished(task: asyncio.Task[Any], request: fastapi.Request) -> bool:
+  """Waits for task; False when the browser stopped waiting first."""
+  while not task.done():
+    await asyncio.wait({task}, timeout=_DISCONNECT_POLL_SEC)
+    if not task.done() and await request.is_disconnected():
+      return False
+  return True
+
+
 @app.post('/api/shortform/edit')
 async def edit(
     body: edit_agent.EditRequest, request: fastapi.Request
@@ -349,16 +360,39 @@ async def edit(
     return _error(f'대본을 읽지 못했습니다: {exc}', 500)
   task = asyncio.create_task(edit_agent.run(body, transcript, context))
   try:
-    while not task.done():
-      await asyncio.wait({task}, timeout=_DISCONNECT_POLL_SEC)
-      if not task.done() and await request.is_disconnected():
-        return _error('편집 요청을 중단했습니다.', 499)
+    if not await _finished(task, request):
+      return _error('편집 요청을 중단했습니다.', 499)
     result = task.result()
   except director.DirectorError as exc:
     return _error(str(exc), 502)
   finally:
     task.cancel()
   return responses.JSONResponse(result.to_json())
+
+
+@app.post('/api/shortform/tts', response_model=None)
+async def speak(
+    body: tts.SpeakRequest, request: fastapi.Request
+) -> fastapi.Response:
+  """Reads one 말로 편집 answer aloud with Gemini TTS (ADR 0012).
+
+  The browser asks for this after it has applied and shown the answer.
+  When it stops waiting (읽기 멈추기, a new request), the call is cancelled
+  as soon as the disconnect reaches the server.
+  """
+  await asyncio.to_thread(_require_session, request)
+  task = asyncio.create_task(tts.synthesize(body.text))
+  try:
+    if not await _finished(task, request):
+      return _error('음성 읽기를 중단했습니다.', 499)
+    audio, mime_type = task.result()
+  except tts.TtsError as exc:
+    return _error(str(exc), 502)
+  finally:
+    task.cancel()
+  return responses.Response(
+      audio, media_type=mime_type, headers={'Cache-Control': 'no-store'}
+  )
 
 
 def _schedule_purge() -> None:

@@ -391,6 +391,7 @@ async def run_gemini(
     job: GeminiJob,
     cache: _VideoCache | None,
     emit: Emit,
+    thinking: types.ThinkingConfig | None = None,
 ) -> GeminiRun:
   """Calls Gemini with retries and model fallback.
 
@@ -399,7 +400,8 @@ async def run_gemini(
   prompt and the JSON is parsed from the text answer. A rejected Context
   Cache is dropped the same way, and the video goes inline. Every call that
   returns a response is priced, including answers retried for being
-  unusable; calls that end in an error are not billed.
+  unusable; calls that end in an error are not billed. `thinking` sets the
+  thinking level of every call; None keeps the model's default.
   """
   settings = config.get_settings()
   backend = gemini.label(settings)
@@ -426,6 +428,7 @@ async def run_gemini(
           cached_content=cached.name if cached is not None else None,
           response_mime_type='application/json' if structured else None,
           response_json_schema=schema if structured else None,
+          thinking_config=thinking,
           # No client-side tools; agentic steps run on the server.
           automatic_function_calling=types.AutomaticFunctionCallingConfig(
               disable=True
