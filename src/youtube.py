@@ -21,10 +21,10 @@ from urllib import parse as urllib_parse
 
 import httpx
 
-from src import config
-from src import ingestion
-from src import models
-from src import storage
+from src.core import config
+from src.core import models
+from src.infra import storage
+from src.media import ingestion
 
 SESSION_COOKIE = 'ytcreator_session'
 STATE_COOKIE = 'ytcreator_oauth_state'

@@ -5,7 +5,7 @@ React 19 + TypeScript(strict) + Vite + Tailwind 4 UI입니다. 구조와 API는 
 
 ```bash
 npm install
-npm run dev     # :3000, 백엔드(src.server, :5000)를 함께 띄움
+npm run dev     # :3000, 백엔드(src.api.server, :5000)를 함께 띄움
 npm run lint    # tsc --noEmit
 npm run build   # dist/ 생성, 백엔드가 서빙
 ```

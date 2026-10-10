@@ -5,7 +5,7 @@ README.md). The Vite dev server proxies /api here; production serves the
 built frontend from frontend/dist as well.
 
 Run:
-  uv run python -m src.server
+  uv run python -m src.api.server
 """
 
 from __future__ import annotations
@@ -26,17 +26,17 @@ from starlette import exceptions as starlette_exceptions
 from starlette import requests as starlette_requests
 import uvicorn
 
-from src import config
 from src import edit_agent
-from src import ingestion
-from src import models
-from src import storage
 from src import youtube
+from src.core import config
+from src.core import fonts
+from src.core import models
 from src.gemini import client as gemini_client
 from src.gemini import director
-from src.gemini import prompts
+from src.infra import storage
+from src.media import ingestion
+from src.prompts import analysis as analysis_prompt
 from src.render import composer
-from src.render import fonts
 from src.render import layout
 
 app = fastapi.FastAPI(title='Agentic Shorts 생성 스튜디오 API')
@@ -120,7 +120,7 @@ def studio_config(request: fastapi.Request) -> dict[str, Any]:
   )
   session = _current_session(request)
   return models.StudioConfig(
-      default_editorial_prompt=prompts.DEFAULT_EDITORIAL_PROMPT,
+      default_editorial_prompt=analysis_prompt.DEFAULT_EDITORIAL_PROMPT,
       composition=config.COMPOSITION,
       template_style=_settings.template_style,
       default_text_layouts=layout.default_text_layouts(

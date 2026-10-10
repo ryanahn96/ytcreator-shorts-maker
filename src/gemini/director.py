@@ -30,21 +30,22 @@ from google.genai import errors as genai_errors
 from google.genai import types
 import httpx
 
-from src import config
-from src import gcp
-from src import ingestion
-from src import models
-from src import speech
-from src import storage
 from src import youtube
+from src.core import config
+from src.core import models
 from src.gemini import client as gemini_client
 from src.gemini import pricing
-from src.gemini import prompts
+from src.infra import gcp
+from src.infra import storage
+from src.media import ingestion
+from src.media import speech
+from src.prompts import analysis as analysis_prompt
 from src.render import layout
 
 Emit = Callable[[dict[str, Any]], Awaitable[None]]
-# How one analysis asks Gemini (see prompts.py): the first analysis of a
-# Source Video is always 'initial'; later ones follow AnalyzeRequest.mode.
+# How one analysis asks Gemini (see src/prompts/analysis.py): the first
+# analysis of a Source Video is always 'initial'; later ones follow
+# AnalyzeRequest.mode.
 _Kind = Literal['initial', 'fast', 'deep']
 
 _PREVIEW_CHARS = 240
@@ -104,16 +105,16 @@ class _Job:
 
   @property
   def system_instruction(self) -> str:
-    return prompts.SYSTEM_INSTRUCTION
+    return analysis_prompt.SYSTEM_INSTRUCTION
 
   def schema(self) -> dict[str, Any]:
-    return prompts.response_schema(
+    return analysis_prompt.response_schema(
         include_transcript=self.kind == 'initial',
         include_framing=self.kind != 'fast',
     )
 
   def request_text(self, inline_schema: dict[str, Any] | None) -> str:
-    return prompts.build_request_text(
+    return analysis_prompt.build_request_text(
         self.kind,
         self.source,
         self.editorial_prompt,
@@ -332,7 +333,7 @@ class _VideoCache:
           model=model,
           config=types.CreateCachedContentConfig(
               contents=[types.Content(role='user', parts=[self._video])],
-              system_instruction=prompts.SYSTEM_INSTRUCTION,
+              system_instruction=analysis_prompt.SYSTEM_INSTRUCTION,
               ttl=f'{self._ttl_sec}s',
               display_name=f'ytcreator-{self._source_id}',
           ),

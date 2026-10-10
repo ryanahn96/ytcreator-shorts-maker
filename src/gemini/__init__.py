@@ -1,1 +1,1 @@
-"""Gemini: client, Scenario analysis (director), prompts and list prices."""
+"""Gemini: client, Scenario analysis (director) and list prices."""

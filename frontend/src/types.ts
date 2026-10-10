@@ -1,5 +1,5 @@
 /**
- * API contract of the studio backend. Mirrors src/models.py, whose
+ * API contract of the studio backend. Mirrors src/core/models.py, whose
  * pydantic models serialize to exactly these camelCase shapes.
  *
  * Terms follow CONTEXT.md: Source Video, Transcript Word, Editorial Prompt,

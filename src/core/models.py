@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 import pydantic
 from pydantic import alias_generators
 
-from src.render import fonts
+from src.core import fonts
 
 MAX_CROP_ZOOM = 4.0
 # Limits of the Look style controls, in canvas units (ASS sizes).

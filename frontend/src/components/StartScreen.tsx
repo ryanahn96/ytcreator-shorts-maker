@@ -33,7 +33,7 @@ import {
 } from './ui';
 
 const VIDEO_ACCEPT = 'video/*';
-// The suffixes the server stores (src/storage.py); some browsers
+// The suffixes the server stores (src/infra/storage.py); some browsers
 // leave file.type empty for .mkv.
 const VIDEO_SUFFIXES = ['.mp4', '.mov', '.m4v', '.mkv', '.webm'];
 const DURATION_MATCH_TOLERANCE_SEC = 2.0;

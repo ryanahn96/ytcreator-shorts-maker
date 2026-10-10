@@ -24,10 +24,10 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 import httpx
 
-from src import config
-from src import gcp
-from src import ingestion
-from src import models
+from src.core import config
+from src.core import models
+from src.infra import gcp
+from src.media import ingestion
 
 _CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 _MAX_CHUNK_SEC = 55.0

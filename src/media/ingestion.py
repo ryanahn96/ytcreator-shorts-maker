@@ -16,8 +16,8 @@ import pathlib
 import subprocess
 from typing import Any
 
-from src import config
-from src import models
+from src.core import config
+from src.core import models
 
 _SOUND_TAG_PAIRS = {'(': ')', '[': ']'}
 

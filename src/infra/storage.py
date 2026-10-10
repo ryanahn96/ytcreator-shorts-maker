@@ -29,7 +29,7 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 import httpx
 
-from src import models
+from src.core import models
 
 _ID_BYTES = 8
 _SOURCE_META = 'source.json'

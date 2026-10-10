@@ -1,6 +1,6 @@
 """The fonts a Look can use for its Headline and captions.
 
-The font files ship in src/render/fonts (SIL Open Font License, texts in
+The font files ship in src/core/fonts (SIL Open Font License, texts in
 fonts/licenses). ffmpeg's subtitles filter loads them through `fontsdir`
 and the browser loads the same files through the fonts route, so the
 preview draws with exactly the fonts the render burns in.

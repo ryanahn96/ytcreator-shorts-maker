@@ -1,1 +1,1 @@
-"""Render: Short Template geometry, bundled fonts and the ffmpeg composer."""
+"""Render: Short Template geometry and the ffmpeg composer."""

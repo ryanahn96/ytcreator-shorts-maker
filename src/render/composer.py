@@ -18,7 +18,7 @@ its Look's Framing Layout, then either scaled into the box on the Look's
 background color or scaled to the whole canvas, before the Clips are joined.
 The ASS file draws, per Look, the square-cornered box border and the
 Headline and captions at the Look's Text Layout in its fonts and colors
-(fonts come from src/render/fonts through the subtitles filter's
+(fonts come from src/core/fonts through the subtitles filter's
 fontsdir).
 Image Overlays are composited above everything during their Look, and
 Background Music is looped, trimmed to the voice track and mixed under it,
@@ -35,9 +35,9 @@ import math
 import pathlib
 import subprocess
 
-from src import config
-from src import models
-from src.render import fonts
+from src.core import config
+from src.core import fonts
+from src.core import models
 from src.render import layout
 
 ASS_FILENAME = 'captions.ass'

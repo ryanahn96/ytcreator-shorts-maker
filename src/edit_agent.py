@@ -30,11 +30,11 @@ from typing import Any, ClassVar, NamedTuple
 from google.genai import types
 import pydantic
 
-from src import config
-from src import models
+from src.core import config
+from src.core import fonts
+from src.core import models
 from src.gemini import client as gemini_client
 from src.gemini import director
-from src.render import fonts
 from src.render import layout
 
 # Answers longer than this are cut; one request rarely needs more.

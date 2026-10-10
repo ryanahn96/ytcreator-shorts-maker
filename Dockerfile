@@ -37,4 +37,4 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Hypercorn speaks h2c, so Cloud Run can use HTTP/2 end-to-end (--use-http2).
 # Over HTTP/1, Cloud Run rejects request bodies above 32 MiB, which would
 # block most Source Video uploads.
-CMD exec hypercorn src.server:app --bind "0.0.0.0:${PORT:-8080}"
+CMD exec hypercorn src.api.server:app --bind "0.0.0.0:${PORT:-8080}"
