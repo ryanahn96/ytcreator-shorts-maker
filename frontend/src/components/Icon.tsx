@@ -51,8 +51,6 @@ const ICON_NAMES = [
   'upload',
   'video_call',
   'video_library',
-  'volume_off',
-  'volume_up',
   'warning',
 ] as const;
 

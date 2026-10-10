@@ -116,8 +116,6 @@ export interface AppliedEdit {
    * changed when the answer's operations did not apply.
    */
   reply: string;
-  /** The summary to read aloud: the answer's speech in place of its reply. */
-  speech: string;
   /** What was adjusted or skipped while applying, for the user. */
   notes: string[];
   /** The Clip to show from its start; null when no Clip changed. */
@@ -830,7 +828,7 @@ class Applier {
 export function applyEditReply(
   current: EditorState,
   sent: SentEdit,
-  answer: Pick<EditResponse, 'reply' | 'speech' | 'operations'>,
+  answer: Pick<EditResponse, 'reply' | 'operations'>,
   context: EditContext,
 ): AppliedEdit {
   const {operations} = answer;
@@ -851,10 +849,7 @@ export function applyEditReply(
     // An answer without operations (a question back, or a reason it could
     // not edit) keeps its reply. When its operations did not apply, the
     // reply tells of edits that did not happen, so it says why instead, as
-    // the server does when it drops every operation. The spoken form
-    // leaves the reason to the notes, which are read after it.
-    const failed = '요청한 편집을 적용하지 못했어요.';
-    const same = '이미 요청한 대로라 바뀐 값이 없어요.';
+    // the server does when it drops every operation.
     return {
       state: current,
       changed: false,
@@ -862,10 +857,8 @@ export function applyEditReply(
         operations.length === 0
           ? answer.reply
           : applier.firstSkip
-            ? `${failed} ${applier.firstSkip}`
-            : same,
-      speech:
-        operations.length === 0 ? answer.speech : applier.firstSkip ? failed : same,
+            ? `요청한 편집을 적용하지 못했어요. ${applier.firstSkip}`
+            : '이미 요청한 대로라 바뀐 값이 없어요.',
       notes: applier.notes,
       focusClipIndex: null,
     };
@@ -876,12 +869,10 @@ export function applyEditReply(
       : [`요청을 보낸 ${scenarioIndex + 1}번 Shorts에 적용했어요.`, ...applier.summary];
   const state =
     focusClipIndex === null ? applier.state : {...applier.state, clipIndex: focusClipIndex};
-  const join = (first: string) => [first, ...summary].filter((text) => text !== '').join(' ');
   return {
     state,
     changed: true,
-    reply: join(answer.reply),
-    speech: join(answer.speech),
+    reply: [answer.reply, ...summary].filter((text) => text !== '').join(' '),
     notes: applier.notes,
     focusClipIndex,
   };

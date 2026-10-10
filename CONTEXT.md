@@ -112,7 +112,7 @@ _화면 표기_: MP4 만들기, YouTube Shorts로 업로드
 _Avoid_: 최종 렌더, 미리보기 렌더, export
 
 **Edit Agent**:
-편집 화면에서 사용자의 Edit Request를 알아듣고 지금 보고 있는 Scenario의 Clip 구간·순서, Look, 자막 글자를 바로 바꾸며, 결과를 글과 음성으로 알려 주는 Gemini 기능. Analysis를 다시 하거나 Render·업로드를 하지는 않는다.
+편집 화면에서 사용자의 Edit Request를 알아듣고 지금 보고 있는 Scenario의 Clip 구간·순서, Look, 자막 글자를 바로 바꾸는 Gemini 기능. Analysis를 다시 하거나 Render·업로드를 하지는 않는다.
 _화면 표기_: 말로 편집
 _Avoid_: AI 편집, Edit Command, 챗봇
 

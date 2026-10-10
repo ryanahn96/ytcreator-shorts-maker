@@ -831,7 +831,6 @@ export function EditorScreen(props: {
       status: 'pending',
       request: text,
       reply: '',
-      speech: '',
       operations: [],
       stepId: null,
       notes: [],
@@ -875,7 +874,6 @@ export function EditorScreen(props: {
         updateEntry(entryId, {
           status: 'done',
           reply: applied.reply,
-          speech: applied.speech,
           operations: response.operations,
           notes: [...response.notes, ...applied.notes],
           stepId,
@@ -1115,7 +1113,6 @@ export function EditorScreen(props: {
           entries={agentEntries}
           lastStepId={history.done.at(-1)?.id ?? null}
           reverted={history.reverted}
-          previewPlaying={playbackState.playing}
           onSend={(text) => sendEdit(text)}
           onStop={stopEdit}
           onRetry={retryEdit}

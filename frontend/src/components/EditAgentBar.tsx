@@ -1,16 +1,15 @@
 /**
  * 말로 편집 (Edit Agent, ADR 0011, 0012), floating at the bottom right of
  * the editor like a chat widget. It takes an Edit Request, typed or spoken,
- * shows the whole answer with its notes and 되돌리기 while its edit is the
- * newest undo step, and reads the answer aloud with Gemini TTS. The
- * requests of this editor session open above it as a history; nothing is
- * stored. One request waits at a time, and 중단 stops it. Folded, it is a
- * pill with a mic; listening or a new answer opens it again.
+ * and shows the whole answer with its notes and 되돌리기 while its edit is
+ * the newest undo step. The requests of this editor session open above it
+ * as a history; nothing is stored. One request waits at a time, and 중단
+ * stops it. Folded, it is a pill with a mic; listening or a new answer
+ * opens it again.
  */
 
 import {useEffect, useRef, useState, type KeyboardEvent, type ReactNode} from 'react';
 
-import {useReplyVoice} from '../hooks/useReplyVoice';
 import {useSpeechInput} from '../hooks/useSpeechInput';
 import type {EditTurn} from '../lib/editAgent';
 import {Icon, type IconName} from './Icon';
@@ -20,8 +19,6 @@ import {Button, IconButton, STATE_LAYER} from './ui';
 export interface EditAgentEntry extends EditTurn {
   id: number;
   status: 'pending' | 'done' | 'failed' | 'stopped';
-  /** The reply written to be heard; it is read aloud with the notes. */
-  speech: string;
   /** What the server and the editor adjusted or skipped. */
   notes: string[];
   /** Why the request failed; empty unless `status` is 'failed'. */
@@ -29,9 +26,8 @@ export interface EditAgentEntry extends EditTurn {
 }
 
 const PLACEHOLDER = '편집 요청을 말하거나 입력하세요. 예: 헤드라인을 노란색으로 크게';
-/** The server's limits on one Edit Request and on one reading. */
+/** The server's limit on one Edit Request. */
 const MAX_REQUEST_CHARS = 2000;
-const MAX_SPEECH_CHARS = 1000;
 /** Room kept between the widget and the controls under it, in pixels. */
 const GAP_PX = 32;
 
@@ -85,8 +81,6 @@ export function EditAgentBar(props: {
   lastStepId: number | null;
   /** Undo steps that are undone now. */
   reverted: ReadonlySet<number>;
-  /** The preview is playing; starting it ends the reading aloud. */
-  previewPlaying: boolean;
   /** Sends an Edit Request; false when it was not sent (one is waiting). */
   onSend: (text: string) => boolean;
   /** Stops the waiting request. */
@@ -94,7 +88,7 @@ export function EditAgentBar(props: {
   onRetry: (entryId: number) => void;
   /** Undoes the newest step. */
   onUndo: () => void;
-  /** Listening or reading aloud starts; the editor pauses the preview. */
+  /** Listening starts; the editor pauses the preview. */
   onPausePreview: () => void;
 }) {
   const {entries, lastStepId} = props;
@@ -120,9 +114,6 @@ export function EditAgentBar(props: {
   }));
   const newestView = views.at(-1);
 
-  const voice = useReplyVoice({onSpeak: props.onPausePreview});
-  const reading = voice.status === 'loading' || voice.status === 'speaking';
-
   // Show the newest turn when the history opens and as turns change.
   useEffect(() => {
     const list = listRef.current;
@@ -131,28 +122,16 @@ export function EditAgentBar(props: {
     }
   }, [historyOpen, entries.length, newest]);
 
-  // A finished request opens the widget, and its answer is read aloud.
+  // A finished request opens the widget.
   useEffect(() => {
     if (!newest || newest === announced.current || newest.status === 'pending') {
       return;
     }
     announced.current = newest;
-    if (newest.status === 'stopped') {
-      return;
-    }
-    setCollapsed(false);
-    if (newest.status === 'done') {
-      const words = [newest.speech || newest.reply, ...newest.notes].join(' ');
-      void voice.speak(words.slice(0, MAX_SPEECH_CHARS));
+    if (newest.status !== 'stopped') {
+      setCollapsed(false);
     }
   }, [newest]);
-
-  // Starting the preview ends the reading, so the two sounds never mix.
-  useEffect(() => {
-    if (props.previewPlaying) {
-      voice.stop();
-    }
-  }, [props.previewPlaying]);
 
   // The editor keeps this much room under its last controls (index.css).
   useEffect(() => {
@@ -195,7 +174,6 @@ export function EditAgentBar(props: {
     if (request === '' || !props.onSend(request)) {
       return false;
     }
-    voice.stop();
     setText('');
     speech.clearError();
     return true;
@@ -214,17 +192,13 @@ export function EditAgentBar(props: {
     },
   });
 
-  // The reading stops first, or the mic would hear it.
   const listen = () => {
-    voice.stop();
-    voice.unlock();
     setCollapsed(false);
     speech.start();
   };
 
   // While listening, sending ends the listen; the final words then go out.
   const submit = () => {
-    voice.unlock();
     if (speech.listening) {
       speech.stop();
     } else {
@@ -242,8 +216,6 @@ export function EditAgentBar(props: {
   };
 
   const retry = (entryId: number) => {
-    voice.stop();
-    voice.unlock();
     speech.clearError();
     props.onRetry(entryId);
   };
@@ -343,23 +315,13 @@ export function EditAgentBar(props: {
             </div>
           </div>
         );
-        actions = (reverted || undoable || voice.status !== 'idle') && (
+        actions = (reverted || undoable) && (
           <>
             {reverted && <RevertedChip />}
             {undoable && (
               <Button variant="text" size="sm" icon="undo" onClick={props.onUndo}>
                 되돌리기
               </Button>
-            )}
-            {reading && (
-              <Button variant="text" size="sm" icon="stop" onClick={voice.stop}>
-                읽기 멈추기
-              </Button>
-            )}
-            {voice.status === 'failed' && (
-              <span className="px-2 text-xs text-error" title={voice.error}>
-                음성으로 읽지 못했어요.
-              </span>
             )}
           </>
         );
@@ -391,9 +353,7 @@ export function EditAgentBar(props: {
           >
             <Icon name="graphic_eq" className="text-primary" />
             말로 편집
-            {(pending || reading) && (
-              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-            )}
+            {pending && <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />}
           </button>
           {speech.supported && (
             <IconButton icon="mic" label="말로 입력" disabled={pending} onClick={listen} />
@@ -480,12 +440,6 @@ export function EditAgentBar(props: {
                 onClick={() => setHistoryOpen((open) => !open)}
               />
             )}
-            <IconButton
-              size="sm"
-              icon={voice.enabled ? 'volume_up' : 'volume_off'}
-              label={voice.enabled ? '음성으로 읽기 끄기' : '음성으로 읽기 켜기'}
-              onClick={voice.toggle}
-            />
             <IconButton size="sm" icon="expand_more" label="말로 편집 접기" onClick={collapse} />
           </header>
           {message && (

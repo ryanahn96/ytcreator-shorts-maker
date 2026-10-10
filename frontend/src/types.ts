@@ -535,8 +535,6 @@ export interface EditRequest {
 export interface EditResponse {
   /** One line for the user. */
   reply: string;
-  /** The reply written to be heard; 말로 편집 reads it aloud with the notes. */
-  speech: string;
   /** Checked operations, in order; apply them as one undo step. */
   operations: EditOperation[];
   /** What the server moved into range or skipped. */
