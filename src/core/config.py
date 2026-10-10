@@ -15,8 +15,8 @@ import tempfile
 
 import dotenv
 
-from yt.studio import fonts
-from yt.studio import models
+from src.core import fonts
+from src.core import models
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 dotenv.load_dotenv(REPO_ROOT / '.env', override=False)
@@ -38,7 +38,7 @@ COMPOSITION = models.CompositionSettings(
     silence_threshold_sec=0.25,
     cut_margin_sec=0.08,
     min_subcut_sec=0.12,
-    caption_max_chars=22,
+    caption_max_chars=models.DEFAULT_CAPTION_MAX_CHARS,
     caption_max_gap_sec=0.6,
     new_clip_sec=6.0,
     edit_window_pad_sec=8.0,
@@ -200,7 +200,7 @@ def _font_warning() -> str:
   if not lost:
     return ''
   return (
-      f'글꼴 파일 {", ".join(lost)}이(가) yt/studio/fonts에 없어 그 글꼴을 '
+      f'글꼴 파일 {", ".join(lost)}이(가) src/core/fonts에 없어 그 글꼴을 '
       '고른 헤드라인·자막은 다른 글꼴로 렌더됩니다.'
   )
 

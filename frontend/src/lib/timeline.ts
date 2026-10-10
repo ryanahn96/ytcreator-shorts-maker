@@ -3,7 +3,7 @@
  * source-to-output time mapping used by the preview.
  *
  * It runs on every edit so the editor, preview and export stay in sync
- * without a server round trip. The backend (yt/studio/composer.py) then
+ * without a server round trip. The backend (src/render/composer.py) then
  * re-validates the plan and snaps it to the frame grid. Clips meet with
  * hard cuts, so picture and sound share one segment list.
  */

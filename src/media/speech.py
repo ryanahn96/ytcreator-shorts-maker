@@ -24,10 +24,10 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 import httpx
 
-from yt.studio import config
-from yt.studio import gcp
-from yt.studio import ingestion
-from yt.studio import models
+from src.core import config
+from src.core import models
+from src.infra import gcp
+from src.media import ingestion
 
 _CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 _MAX_CHUNK_SEC = 55.0
@@ -449,12 +449,11 @@ def transcribe_video(
     SpeechError: If audio extraction or the Speech-to-Text V2 call fails.
   """
   settings = config.get_settings()
-  ok, err = gcp.ensure_service_enabled(
+  if err := gcp.ensure_service_enabled(
       settings.speech_project,
       gcp.SPEECH_API_SERVICE,
       display_name='Cloud Speech-to-Text',
-  )
-  if not ok:
+  ):
     raise SpeechError(err)
   chunks = plan_audio_chunks(duration_sec, silences)
   if not chunks:

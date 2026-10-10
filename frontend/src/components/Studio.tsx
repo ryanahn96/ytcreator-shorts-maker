@@ -4,7 +4,7 @@
  * music, the Editorial Prompt and the current analysis session.
  */
 
-import {useCallback, useRef, useState} from 'react';
+import {useCallback, useState} from 'react';
 
 import {useAnalysis} from '../hooks/useAnalysis';
 import {useAssets} from '../hooks/useAssets';
@@ -31,11 +31,11 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
   const [youtubeVideoId, setYoutubeVideoId] = useState('');
   const [session, setSession] = useState<Session | null>(null);
   const [dialog, setDialog] = useState<'reanalyze' | 'newVideo' | null>(null);
-  const sessions = useRef(0);
-  const onResult = useCallback((result: AnalysisResult) => {
-    sessions.current += 1;
-    setSession({id: sessions.current, result});
-  }, []);
+  const onResult = useCallback(
+    (result: AnalysisResult) =>
+      setSession((current) => ({id: (current?.id ?? 0) + 1, result})),
+    [],
+  );
   const analysis = useAnalysis(onResult);
 
   const ready = upload.state.status === 'ready' ? upload.state : null;

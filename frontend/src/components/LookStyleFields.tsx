@@ -13,7 +13,7 @@ import type {FontEntry, HeadlineStyle, LookStyle, TextStyle, VideoFit} from '../
 import {Icon} from './Icon';
 import {ColorField, IconButton, Section, SliderField, STATE_LAYER, Toggle} from './ui';
 
-// The same limits as TextStyle / LookStyle in yt/studio/models.py.
+// The same limits as TextStyle / LookStyle in src/core/models.py.
 const MIN_TEXT_SIZE = 16;
 const MAX_TEXT_SIZE = 200;
 const MAX_TEXT_OUTLINE = 12;
@@ -24,7 +24,6 @@ const FONT_SAMPLE = '가나다 ABC 123';
 function StyleSection(props: {
   title: string;
   anchor?: string;
-  resetLabel: string;
   changed: boolean;
   onReset: () => void;
   children: ReactNode;
@@ -35,7 +34,7 @@ function StyleSection(props: {
       anchor={props.anchor}
       actions={
         <IconButton
-          label={props.resetLabel}
+          label={`${props.title} 기본값으로`}
           icon="undo"
           size="sm"
           disabled={!props.changed}
@@ -211,7 +210,6 @@ export function LookStyleFields(props: {
     <>
       <StyleSection
         title="배경·테두리"
-        resetLabel="배경·테두리 기본값으로"
         changed={!sameJson(canvas, canvasDefaults)}
         onReset={() => onChange({...value, ...canvasDefaults})}
       >
@@ -245,7 +243,6 @@ export function LookStyleFields(props: {
       </StyleSection>
       <StyleSection
         title="헤드라인 글자"
-        resetLabel="헤드라인 글자 기본값으로"
         changed={!sameJson(value.headline, defaults.headline)}
         onReset={() => setHeadline(defaults.headline)}
       >
@@ -273,7 +270,6 @@ export function LookStyleFields(props: {
       <StyleSection
         title="자막 글자"
         anchor="caption-style"
-        resetLabel="자막 글자 기본값으로"
         changed={!sameJson(value.caption, defaults.caption)}
         onReset={() => setCaption(defaults.caption)}
       >

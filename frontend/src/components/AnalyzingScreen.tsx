@@ -10,7 +10,7 @@ import {formatLength} from '../lib/format';
 import {BrandMark} from './Icon';
 import {Button} from './ui';
 
-/** A plain status line for a server progress stage (yt/studio/director.py). */
+/** A plain status line for a server progress stage (src/gemini/director.py). */
 export function statusLine(stage: string): string {
   switch (stage) {
     case 'gemini':

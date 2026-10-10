@@ -30,21 +30,23 @@ from google.genai import errors as genai_errors
 from google.genai import types
 import httpx
 
-from yt.studio import config
-from yt.studio import gcp
-from yt.studio import gemini
-from yt.studio import ingestion
-from yt.studio import layout
-from yt.studio import models
-from yt.studio import pricing
-from yt.studio import prompts
-from yt.studio import speech
-from yt.studio import storage
-from yt.studio import youtube
+from src.core import config
+from src.core import models
+from src.gemini import client as gemini_client
+from src.gemini import pricing
+from src.infra import gcp
+from src.infra import storage
+from src.media import ingestion
+from src.media import speech
+from src.prompts import analysis as analysis_prompt
+from src.render import layout
+from src.youtube import common as youtube_common
+from src.youtube import video_context
 
 Emit = Callable[[dict[str, Any]], Awaitable[None]]
-# How one analysis asks Gemini (see prompts.py): the first analysis of a
-# Source Video is always 'initial'; later ones follow AnalyzeRequest.mode.
+# How one analysis asks Gemini (see src/prompts/analysis.py): the first
+# analysis of a Source Video is always 'initial'; later ones follow
+# AnalyzeRequest.mode.
 _Kind = Literal['initial', 'fast', 'deep']
 
 _PREVIEW_CHARS = 240
@@ -104,16 +106,16 @@ class _Job:
 
   @property
   def system_instruction(self) -> str:
-    return prompts.SYSTEM_INSTRUCTION
+    return analysis_prompt.SYSTEM_INSTRUCTION
 
   def schema(self) -> dict[str, Any]:
-    return prompts.response_schema(
+    return analysis_prompt.response_schema(
         include_transcript=self.kind == 'initial',
         include_framing=self.kind != 'fast',
     )
 
   def request_text(self, inline_schema: dict[str, Any] | None) -> str:
-    return prompts.build_request_text(
+    return analysis_prompt.build_request_text(
         self.kind,
         self.source,
         self.editorial_prompt,
@@ -132,13 +134,9 @@ class GeminiRun:
   cost_usd: float | None
 
 
-def progress(stage: str, message: str = '') -> dict[str, Any]:
-  """Builds a progress event for the analyze stream.
-
-  The UI shows a fixed status line per stage; only 'thought' events carry
-  text (the model's latest thought summary).
-  """
-  return {'type': 'progress', 'stage': stage, 'message': message}
+def progress(stage: str) -> dict[str, Any]:
+  """Builds a progress event for the analyze stream."""
+  return {'type': 'progress', 'stage': stage}
 
 
 # --------------------------------------------------------------------------
@@ -158,17 +156,13 @@ def clean_text(value: Any) -> str:
   return value.strip() if isinstance(value, str) else ''
 
 
-def _float(value: Any) -> float | None:
-  if value is None or isinstance(value, bool):
+def as_float(value: Any) -> float | None:
+  if isinstance(value, bool) or not isinstance(value, (int, float, str)):
     return None
-  if isinstance(value, (int, float)):
+  try:
     return float(value)
-  if isinstance(value, str):
-    try:
-      return float(value.strip())
-    except ValueError:
-      return None
-  return None
+  except ValueError:
+    return None
 
 
 def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
@@ -193,7 +187,7 @@ def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
         value = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
       else:
         return None
-  num = _float(value)
+  num = as_float(value)
   if num is None:
     return None
 
@@ -247,9 +241,8 @@ async def _stream_once(
     model: str,
     contents: list[Any],
     generation_config: types.GenerateContentConfig,
-    emit: Emit,
 ) -> tuple[str, types.GenerateContentResponseUsageMetadata | None]:
-  """Streams one generation and reports its thoughts.
+  """Streams one generation.
 
   Returns:
     The answer text and the call's usage. Usage is not split across chunks:
@@ -268,10 +261,7 @@ async def _stream_once(
         # part of the answer.
         if part.tool_call is not None or part.tool_response is not None:
           continue
-        if part.thought:
-          if part.text:
-            await emit(progress('thought', part.text[:_PREVIEW_CHARS]))
-        elif part.text:
+        if not part.thought and part.text:
           texts.append(part.text)
     if chunk.usage_metadata is not None:
       usage = chunk.usage_metadata
@@ -332,7 +322,7 @@ class _VideoCache:
           model=model,
           config=types.CreateCachedContentConfig(
               contents=[types.Content(role='user', parts=[self._video])],
-              system_instruction=prompts.SYSTEM_INSTRUCTION,
+              system_instruction=analysis_prompt.SYSTEM_INSTRUCTION,
               ttl=f'{self._ttl_sec}s',
               display_name=f'ytcreator-{self._source_id}',
           ),
@@ -391,6 +381,7 @@ async def run_gemini(
     job: GeminiJob,
     cache: _VideoCache | None,
     emit: Emit,
+    thinking: types.ThinkingConfig | None = None,
 ) -> GeminiRun:
   """Calls Gemini with retries and model fallback.
 
@@ -399,10 +390,11 @@ async def run_gemini(
   prompt and the JSON is parsed from the text answer. A rejected Context
   Cache is dropped the same way, and the video goes inline. Every call that
   returns a response is priced, including answers retried for being
-  unusable; calls that end in an error are not billed.
+  unusable; calls that end in an error are not billed. `thinking` sets the
+  thinking level of every call; None keeps the model's default.
   """
   settings = config.get_settings()
-  backend = gemini.label(settings)
+  backend = gemini_client.label(settings)
   schema = job.schema()
   regional = (
       settings.gemini_backend == 'vertex'
@@ -426,6 +418,7 @@ async def run_gemini(
           cached_content=cached.name if cached is not None else None,
           response_mime_type='application/json' if structured else None,
           response_json_schema=schema if structured else None,
+          thinking_config=thinking,
           # No client-side tools; agentic steps run on the server.
           automatic_function_calling=types.AutomaticFunctionCallingConfig(
               disable=True
@@ -437,7 +430,7 @@ async def run_gemini(
       await emit(progress('gemini'))
       try:
         text, usage = await _stream_once(
-            client, model, contents, generation_config, emit
+            client, model, contents, generation_config
         )
         # Priced before parsing, since an unusable answer is billed too.
         costs.append(
@@ -446,7 +439,9 @@ async def run_gemini(
         data = _parse_json(text)
       except google_auth_exceptions.GoogleAuthError as exc:
         # Credentials fail the same way for every model, so stop here.
-        raise DirectorError(gemini.auth_failure_message(settings, exc)) from exc
+        raise DirectorError(
+            gemini_client.auth_failure_message(settings, exc)
+        ) from exc
       except genai_errors.ClientError as exc:
         if exc.code in _AUTH_ERROR_CODES:
           if (
@@ -518,8 +513,8 @@ async def run_gemini(
 
 def _crop(raw: Any) -> models.CropRegion:
   data = as_dict(raw)
-  center_x = _float(data.get('centerX'))
-  center_y = _float(data.get('centerY'))
+  center_x = as_float(data.get('centerX'))
+  center_y = as_float(data.get('centerY'))
   # Keep initial scenario zoom at 1.0 so the source frame is never degraded
   # by automatic digital zoom; center_x/center_y still guide aspect crops.
   return models.CropRegion(
@@ -722,13 +717,13 @@ async def _resolve_youtube_context(
   await emit(progress('youtube'))
   try:
     context = await asyncio.to_thread(
-        youtube.fetch_video_context, access_token, video_id, duration_sec
+        video_context.fetch_video_context, access_token, video_id, duration_sec
     )
     await asyncio.to_thread(
         workspace.save_youtube_context, source_id, context
     )
     return context
-  except youtube.YouTubeError as exc:
+  except youtube_common.YouTubeError as exc:
     warnings.append(f'YouTube 데이터를 불러오지 못해 영상만으로 진행합니다: {exc}')
     return stored
 
@@ -903,7 +898,7 @@ async def analyze(
     kind = 'deep'
   else:
     kind = request.mode
-  client = gemini.make_client(settings)
+  client = gemini_client.make_client(settings)
   cache = None
   if kind != 'fast':
     record = await asyncio.to_thread(workspace.load_video_cache, source_id)

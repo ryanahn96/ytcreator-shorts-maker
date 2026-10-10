@@ -1,6 +1,6 @@
 """The fonts a Look can use for its Headline and captions.
 
-The font files ship in yt/studio/fonts (SIL Open Font License, texts in
+The font files ship in src/core/fonts (SIL Open Font License, texts in
 fonts/licenses). ffmpeg's subtitles filter loads them through `fontsdir`
 and the browser loads the same files through the fonts route, so the
 preview draws with exactly the fonts the render burns in.
@@ -23,7 +23,6 @@ DEFAULT_HEADLINE_FONT = 'noto-sans-kr'
 DEFAULT_CAPTION_FONT = 'noto-sans-kr'
 
 # Byte offsets inside the sfnt tables that em_per_line_box reads.
-_TABLE_RECORD = struct.Struct('>4sIII')
 _HEAD_UNITS_PER_EM = 18
 _OS2_WIN_ASCENT = 74
 _HHEA_ASCENDER = 4
@@ -100,11 +99,8 @@ def missing() -> list[str]:
 def _tables(data: bytes) -> dict[bytes, int]:
   """Returns the offset of every table of an sfnt file."""
   (count,) = struct.unpack_from('>H', data, 4)
-  tables = {}
-  for index in range(count):
-    tag, _, offset, _ = _TABLE_RECORD.unpack_from(data, 12 + 16 * index)
-    tables[tag] = offset
-  return tables
+  records = struct.iter_unpack('>4sIII', data[12 : 12 + 16 * count])
+  return {tag: offset for tag, _, offset, _ in records}
 
 
 @functools.cache

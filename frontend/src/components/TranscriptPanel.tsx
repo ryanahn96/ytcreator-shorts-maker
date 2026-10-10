@@ -2,10 +2,9 @@
  * The whole transcript as clickable Transcript Words and lines, plus quick
  * caption controls right inside the 자막 tab:
  * - Full transcript vs current clip filter + search bar + clip membership badges
- * - Default 'direct' (바로 편집) mode: clicking any word opens an inline action
- *   bar with word text editing, word cut/restore, clip start/end, and split
- * - Batch pick modes (시작점, 끝점, 나누기, 단어 삭제, 자막 수정) for rapid one-click edits
- * - Line-level quick actions: [시작], [끝], [+클립], [문장 수정]
+ * - Clicking any word opens an inline action bar with word text editing,
+ *   word cut/restore, clip start/end, and split
+ * - Line-level quick actions: [시작], [끝], [+클립]
  * - Collapsible 자막 빠른 설정 bar (세로 위치, 글자 크기, 한 줄 글자 수, 글자색, 배경 박스)
  */
 
@@ -22,7 +21,7 @@ import {
 import {clipEdgeRange, type EditorAction} from '../lib/editor';
 import type {FocusRequest} from '../lib/focus';
 import {formatClock, formatSeconds} from '../lib/format';
-import {lookTarget} from '../lib/look';
+import {effectiveLook, lookTarget} from '../lib/look';
 import type {ResolvedClip, Transcript, TranscriptEdits} from '../lib/timeline';
 import type {
   Look,
@@ -252,9 +251,8 @@ function QuickCaptionControls(props: {
   dispatch: Dispatch<EditorAction>;
 }) {
   const {config, scenario, clipIndex, captionMaxChars, dispatch} = props;
-  const clip = scenario.clips[clipIndex];
   const target = lookTarget(scenario, clipIndex);
-  const look: Look = clip?.look ?? scenario.look;
+  const look = effectiveLook(scenario, scenario.clips[clipIndex]);
   const captionStyle: TextStyle = look.style.caption;
   const captionPlacement: TextPlacement = look.textLayout.caption;
   const defaultPlacement = config.defaultTextLayouts[look.framingLayout.fit].caption;

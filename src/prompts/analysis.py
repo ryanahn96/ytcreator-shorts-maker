@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from yt.studio import models
+from src.core import models
 
 DEFAULT_EDITORIAL_PROMPT = """\
 당신은 정보성 롱폼 영상(강의, 강연, 인터뷰)을 9:16 세로 Shorts로 재구성하는 편집 \
@@ -193,13 +193,11 @@ def format_retention(
       continue
     lines.append(header)
     for idx, span in enumerate(spans, start=1):
-      watch_pct = span.watch_ratio * 100
-      rel_pct = span.relative_performance * 100
       lines.append(
           f'- {tag} {idx} [{span.start_sec:.1f}s - {span.end_sec:.1f}s '
           f'({clock(span.start_sec)} ~ {clock(span.end_sec)})]: '
-          f'시청 유지율 {watch_pct:.0f}%, '
-          f'상대적 유지 성과 {rel_pct:.0f}% ({span.label})'
+          f'시청 유지율 {span.watch_ratio:.0%}, '
+          f'상대적 유지 성과 {span.relative_performance:.0%} ({span.label})'
       )
   if context.comments:
     lines.append(

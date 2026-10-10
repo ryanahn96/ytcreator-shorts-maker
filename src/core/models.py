@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 import pydantic
 from pydantic import alias_generators
 
-from yt.studio import fonts
+from src.core import fonts
 
 MAX_CROP_ZOOM = 4.0
 # Limits of the Look style controls, in canvas units (ASS sizes).
@@ -23,6 +23,9 @@ MAX_BORDER_WIDTH = 40
 # Background Music gain is at most the file's own level (the browser
 # preview cannot boost an <audio> element either).
 MAX_MUSIC_VOLUME = 1.0
+# Caption line length (characters) a new editor starts with. Defined here,
+# not in config, because EditRequest needs it and config imports this module.
+DEFAULT_CAPTION_MAX_CHARS = 22
 
 # How the server calls Gemini:
 #   ai_studio: Gemini Developer API with GEMINI_API_KEY.
@@ -706,3 +709,44 @@ class StudioConfig(StudioModel):
   # Non-empty when the server cannot call Gemini; says what to configure.
   gemini_setup_error: str
   auth: AuthStatus
+
+
+class EditTurn(StudioModel):
+  """An earlier Edit Request of this editor session."""
+
+  request: str
+  reply: str = ''
+  operations: list[dict[str, Any]] = pydantic.Field(default_factory=list)
+  # Whether the user undid the edits of this turn.
+  undone: bool = False
+
+
+class EditRequest(StudioModel):
+  """Request body of the edit endpoint: one Edit Request and its context."""
+
+  source_id: str = pydantic.Field(min_length=1)
+  request: str = pydantic.Field(min_length=1, max_length=2000)
+  # The Shorts on screen when the request was sent.
+  scenario: Scenario
+  shorts_number: int = pydantic.Field(ge=1)
+  shorts_count: int = pydantic.Field(ge=1)
+  # Clip Number (from 1) of the selected Clip; None when there is none.
+  clip_number: int | None = None
+  # Source Video second under the playhead; None over an inserted clip.
+  playhead_sec: float | None = None
+  source_duration_sec: float = pydantic.Field(default=0.0, ge=0.0)
+  # Transcript-wide caption edits (word index -> caption text).
+  cut_words: list[int] = pydantic.Field(default_factory=list)
+  word_text: dict[int, str] = pydantic.Field(default_factory=dict)
+  caption_max_chars: int = DEFAULT_CAPTION_MAX_CHARS
+  assets: list[UploadedAsset] = pydantic.Field(default_factory=list)
+  history: list[EditTurn] = pydantic.Field(default_factory=list)
+
+
+class EditResponse(StudioModel):
+  """The checked operations of one Edit Request and the reply to show."""
+
+  reply: str
+  operations: list[dict[str, Any]]
+  # Values the server moved into range and operations it skipped.
+  notes: list[str] = pydantic.Field(default_factory=list)

@@ -16,8 +16,8 @@ import pathlib
 import subprocess
 from typing import Any
 
-from yt.studio import config
-from yt.studio import models
+from src.core import config
+from src.core import models
 
 _SOUND_TAG_PAIRS = {'(': ')', '[': ']'}
 
@@ -167,23 +167,17 @@ def _normalize_caption_lines(
   """Sorts lines, trims overlaps with the next line, and caps long holds."""
   ordered = sorted(lines, key=lambda line: (line.start, line.end))
   normalized: list[CaptionLine] = []
-  total = len(ordered)
   for idx, line in enumerate(ordered):
     tokens = line.text.split()
     if not tokens or line.end <= line.start:
       continue
-    start = line.start
     end = line.end
-    if idx + 1 < total:
-      next_start = ordered[idx + 1].start
-      if next_start > start and end > next_start:
-        end = next_start
+    if idx + 1 < len(ordered) and ordered[idx + 1].start > line.start:
+      end = min(end, ordered[idx + 1].start)
     char_count = sum(len(token) for token in tokens)
     max_span = max(1.2, char_count * 0.16 + len(tokens) * 0.35)
-    if end - start > max_span:
-      end = start + max_span
-    if end > start:
-      normalized.append(CaptionLine(start=start, end=end, text=line.text))
+    end = min(end, line.start + max_span)
+    normalized.append(CaptionLine(start=line.start, end=end, text=line.text))
   return normalized
 
 

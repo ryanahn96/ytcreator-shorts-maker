@@ -1,6 +1,6 @@
 /**
  * The bundled fonts in the browser. Each font file the render uses
- * (yt/studio/fonts.py) is registered as a FontFace under its own family
+ * (src/core/fonts.py) is registered as a FontFace under its own family
  * name, so the preview draws with the same file ffmpeg burns in.
  *
  * libass sizes a font so that one line box equals the ASS font size, while

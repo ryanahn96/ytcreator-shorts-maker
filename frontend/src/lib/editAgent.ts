@@ -3,7 +3,7 @@
  * the editor state into an Edit Request; applyEditReply applies the checked
  * edit operations of the answer to the newest editor state, which the
  * editor then commits as one undo step. The server side is
- * yt/studio/edit_agent.py.
+ * src/edit_agent/ (checks) and src/prompts/edit_agent.py (request text).
  *
  * Operations name Clips by Clip Number, as on screen when the request was
  * sent. SentEdit keeps the Clip ids behind those numbers, so every number
@@ -151,8 +151,7 @@ export function buildEditRequest(input: {
     clipNumber: selected ? state.clipIndex + 1 : null,
     playheadSec,
     // An unknown length is Infinity in the editor, which JSON cannot carry.
-    sourceDurationSec:
-      Number.isFinite(sourceDurationSec) && sourceDurationSec > 0 ? sourceDurationSec : 0,
+    sourceDurationSec: Number.isFinite(sourceDurationSec) ? sourceDurationSec : 0,
     cutWords: [...state.cutWords].sort((a, b) => a - b),
     wordText: Object.fromEntries(state.wordText),
     captionMaxChars: state.settings.captionMaxChars,
@@ -399,9 +398,7 @@ class Applier {
         return;
       case 'resetWordText':
         for (const index of operation.words) {
-          if (this.state.wordText.has(index)) {
-            this.run({type: 'setWordText', index, text: null});
-          }
+          this.run({type: 'setWordText', index, text: null});
         }
         return;
       case 'cutWords':

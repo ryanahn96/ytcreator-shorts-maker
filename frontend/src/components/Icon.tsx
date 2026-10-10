@@ -24,6 +24,7 @@ const ICON_NAMES = [
   'expand_more',
   'fullscreen',
   'fullscreen_exit',
+  'graphic_eq',
   'history',
   'image',
   'insights',
@@ -95,9 +96,8 @@ export function Icon(props: {
  * The app icon (public/favicon.svg): white scissors on a YouTube-red rounded
  * square.
  */
-export function BrandMark(props: {size?: number}) {
-  const size = props.size ?? 32;
+export function BrandMark(props: {size: number}) {
   return (
-    <img src="/favicon.svg" alt="" width={size} height={size} className="shrink-0" />
+    <img src="/favicon.svg" alt="" width={props.size} height={props.size} className="shrink-0" />
   );
 }

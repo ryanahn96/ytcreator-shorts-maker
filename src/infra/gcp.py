@@ -20,7 +20,7 @@ from google import auth as google_auth
 from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 
-from yt.studio import config
+from src.core import config
 
 logger = logging.getLogger(__name__)
 
@@ -211,43 +211,39 @@ def ensure_service_enabled(
     project_id: str,
     service_name: str,
     *,
-    display_name: str = '',
-) -> tuple[bool, str]:
+    display_name: str,
+) -> str:
   """Ensures a service is enabled, automatically enabling it if needed.
 
   Args:
     project_id: The Google Cloud project ID.
     service_name: The GCP service name (e.g. 'aiplatform.googleapis.com').
-    display_name: Optional human-readable service name for error messages.
+    display_name: Human-readable service name for error messages.
 
   Returns:
-    A tuple (is_enabled, error_message). On success, error_message is empty.
+    An empty string when enabled, or an error message on failure.
   """
-  project = project_id.strip()
-  service = service_name.strip()
-  label = display_name or service
-  if not project:
-    return False, 'GCP 프로젝트 ID가 지정되지 않았습니다.'
+  if not project_id:
+    return 'GCP 프로젝트 ID가 지정되지 않았습니다.'
 
-  if is_service_enabled(project, service):
-    return True, ''
+  if is_service_enabled(project_id, service_name):
+    return ''
 
   logger.info(
       'Service %s is not enabled in %s; enabling automatically...',
-      service,
-      project,
+      service_name,
+      project_id,
   )
-  if enable_service(project, service):
-    return True, ''
+  if enable_service(project_id, service_name):
+    return ''
 
   console_url = (
       f'https://console.developers.google.com/apis/api/'
-      f'{service}/overview?project={project}'
+      f'{service_name}/overview?project={project_id}'
   )
   return (
-      False,
-      f'{label} API가 활성화되어 있지 않으며 자동 활성화에 실패했습니다. '
-      f'다음 링크에서 직접 활성화한 후 다시 시도해 주세요: {console_url}',
+      f'{display_name} API가 활성화되어 있지 않으며 자동 활성화에 실패했습니다. '
+      f'다음 링크에서 직접 활성화한 후 다시 시도해 주세요: {console_url}'
   )
 
 
@@ -262,9 +258,8 @@ def ensure_vertex_api_enabled(settings: config.Settings) -> str:
   """
   if settings.gemini_backend != 'vertex' or not settings.vertex_project:
     return ''
-  ok, err = ensure_service_enabled(
+  return ensure_service_enabled(
       settings.vertex_project,
       VERTEX_API_SERVICE,
       display_name='Vertex AI (Agent Platform)',
   )
-  return err if not ok else ''

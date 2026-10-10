@@ -123,10 +123,11 @@ export interface SourceSeekRequest {
  * A one-off request from the editor, acted on once per seq: pause, or
  * pause and show the Clip at `clipIndex` from its start.
  */
-export type PreviewCommand = {seq: number} & (
+export type PreviewCommandInput =
   | {kind: 'pause'}
-  | {kind: 'seekClip'; clipIndex: number}
-);
+  | {kind: 'seekClip'; clipIndex: number};
+
+export type PreviewCommand = {seq: number} & PreviewCommandInput;
 
 export function PreviewStage(props: {
   config: StudioConfig;

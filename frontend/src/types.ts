@@ -1,5 +1,5 @@
 /**
- * API contract of the studio backend. Mirrors yt/studio/models.py, whose
+ * API contract of the studio backend. Mirrors src/core/models.py, whose
  * pydantic models serialize to exactly these camelCase shapes.
  *
  * Terms follow CONTEXT.md: Source Video, Transcript Word, Editorial Prompt,
@@ -320,7 +320,7 @@ export interface AnalyzeRequest {
 
 /** One NDJSON event of the analyze stream. */
 export type AnalyzeEvent =
-  | {type: 'progress'; stage: string; message: string}
+  | {type: 'progress'; stage: string}
   | {type: 'heartbeat'}
   | {type: 'result'; result: AnalysisResult}
   | {type: 'error'; error: string};
@@ -496,7 +496,8 @@ export interface StudioConfig {
 }
 
 /*
- * 말로 편집 (Edit Agent): POST /edit. Mirrors yt/studio/edit_agent.py.
+ * 말로 편집 (Edit Agent): POST /edit. Mirrors the Edit models in
+ * src/core/models.py.
  * Clips are named by Clip Number, counted from 1 as on screen when the
  * Edit Request was sent.
  */

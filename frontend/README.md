@@ -5,7 +5,7 @@ React 19 + TypeScript(strict) + Vite + Tailwind 4 UI입니다. 구조와 API는 
 
 ```bash
 npm install
-npm run dev     # :3000, 백엔드(yt.server, :5000)를 함께 띄움
+npm run dev     # :3000, 백엔드(src.main, :5000)를 함께 띄움
 npm run lint    # tsc --noEmit
 npm run build   # dist/ 생성, 백엔드가 서빙
 ```
@@ -16,5 +16,6 @@ npm run build   # dist/ 생성, 백엔드가 서빙
   적용합니다. Tailwind에서는 `bg-surface`, `text-on-surface`, `text-primary`처럼 씁니다.
 - 아이콘은 Material Symbols Rounded입니다. 새 아이콘은 `src/components/Icon.tsx`의
   `ICON_NAMES`에 알파벳순으로 넣어야 글꼴에 포함됩니다.
-- 브라우저 미리보기는 렌더와 같은 Subcut과 J/L컷 타이밍을 씁니다. 렌더는 서버에서
-  1080×1920 MP4 하나로 만듭니다.
+- 브라우저 미리보기는 `lib/timeline.ts`의 Subcut 계산과 글꼴 파일을 렌더와 똑같이 씁니다.
+  클립 사이는 모두 하드 컷입니다. 렌더는 서버에서 1080p, 1440p, 4K 중 고른 화질의 MP4
+  하나로 만듭니다.
