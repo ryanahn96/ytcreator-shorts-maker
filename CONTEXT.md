@@ -75,7 +75,7 @@ Headline 또는 자막 한 블록을 그리는 방식. Bundled Font 하나, 크�
 _Avoid_: Caption style, font settings
 
 **Bundled Font**:
-저장소(yt/studio/fonts)에 들어 있는 무료(OFL) 한글 글꼴 파일. 렌더(ffmpeg)와 미리보기(브라우저)가 같은 파일을 쓴다. Text Style은 이 목록에서만 글꼴을 고른다.
+저장소에 들어 있는 무료(OFL) 한글 글꼴 파일. 렌더(ffmpeg)와 미리보기(브라우저)가 같은 파일을 쓴다. Text Style은 이 목록에서만 글꼴을 고른다.
 _Avoid_: System font, font family setting
 
 **Framing Layout**:

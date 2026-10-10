@@ -30,12 +30,12 @@ from typing import Any, ClassVar, NamedTuple
 from google.genai import types
 import pydantic
 
-from yt.studio import config
-from yt.studio import director
-from yt.studio import fonts
-from yt.studio import gemini
-from yt.studio import layout
-from yt.studio import models
+from src import config
+from src import models
+from src.gemini import client as gemini_client
+from src.gemini import director
+from src.render import fonts
+from src.render import layout
 
 # Answers longer than this are cut; one request rarely needs more.
 _MAX_OPERATIONS = 60
@@ -2178,7 +2178,7 @@ async def run(
   settings = config.get_settings()
   if settings.gemini_setup_error:
     raise director.DirectorError(settings.gemini_setup_error)
-  client = gemini.make_client(settings)
+  client = gemini_client.make_client(settings)
   job = _EditJob(request=request, transcript=transcript, context=context)
   answer = await director.run_gemini(
       client, job, None, _ignore, thinking=_THINKING

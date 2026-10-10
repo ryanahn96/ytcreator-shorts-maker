@@ -15,10 +15,10 @@ import tempfile
 
 import dotenv
 
-from yt.studio import fonts
-from yt.studio import models
+from src import models
+from src.render import fonts
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 dotenv.load_dotenv(REPO_ROOT / '.env', override=False)
 
 # Models that support MediaProcessing.AGENTIC, tried in order on failure.
@@ -200,7 +200,7 @@ def _font_warning() -> str:
   if not lost:
     return ''
   return (
-      f'글꼴 파일 {", ".join(lost)}이(가) yt/studio/fonts에 없어 그 글꼴을 '
+      f'글꼴 파일 {", ".join(lost)}이(가) src/render/fonts에 없어 그 글꼴을 '
       '고른 헤드라인·자막은 다른 글꼴로 렌더됩니다.'
   )
 

@@ -3,7 +3,7 @@
  * the editor state into an Edit Request; applyEditReply applies the checked
  * edit operations of the answer to the newest editor state, which the
  * editor then commits as one undo step. The server side is
- * yt/studio/edit_agent.py.
+ * src/edit_agent.py.
  *
  * Operations name Clips by Clip Number, as on screen when the request was
  * sent. SentEdit keeps the Clip ids behind those numbers, so every number

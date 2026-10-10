@@ -18,7 +18,8 @@ its Look's Framing Layout, then either scaled into the box on the Look's
 background color or scaled to the whole canvas, before the Clips are joined.
 The ASS file draws, per Look, the square-cornered box border and the
 Headline and captions at the Look's Text Layout in its fonts and colors
-(fonts come from yt/studio/fonts through the subtitles filter's fontsdir).
+(fonts come from src/render/fonts through the subtitles filter's
+fontsdir).
 Image Overlays are composited above everything during their Look, and
 Background Music is looped, trimmed to the voice track and mixed under it,
 so the edit stays one ffmpeg command plus one ASS file (and the user's
@@ -34,10 +35,10 @@ import math
 import pathlib
 import subprocess
 
-from yt.studio import config
-from yt.studio import fonts
-from yt.studio import layout
-from yt.studio import models
+from src import config
+from src import models
+from src.render import fonts
+from src.render import layout
 
 ASS_FILENAME = 'captions.ass'
 _EPSILON = 1e-6

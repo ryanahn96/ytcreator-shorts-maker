@@ -38,7 +38,7 @@ function pythonBackendPlugin(): Plugin {
           return;
         }
         const rootDir = path.resolve(__dirname, '..');
-        pyProc = spawn('uv', ['run', 'python', '-m', 'yt.server'], {
+        pyProc = spawn('uv', ['run', 'python', '-m', 'src.server'], {
           cwd: rootDir,
           env: { ...process.env, BACKEND_PORT },
           stdio: 'inherit',
@@ -47,7 +47,7 @@ function pythonBackendPlugin(): Plugin {
           // Fallback to .venv/bin/python or python3 if uv is not on PATH
           const venvPy = path.join(rootDir, '.venv', 'bin', 'python');
           const pyCmd = fs.existsSync(venvPy) ? venvPy : 'python3';
-          pyProc = spawn(pyCmd, ['-m', 'yt.server'], {
+          pyProc = spawn(pyCmd, ['-m', 'src.server'], {
             cwd: rootDir,
             env: { ...process.env, BACKEND_PORT },
             stdio: 'inherit',

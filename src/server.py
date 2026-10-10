@@ -1,11 +1,11 @@
 """FastAPI routes of Agentic Shorts 생성 스튜디오.
 
-This module only maps HTTP to the yt.studio pipeline (see
-yt/studio/__init__.py). The Vite dev server proxies /api here; production
-serves the built frontend from frontend/dist as well.
+This module only maps HTTP to the src package (see the backend table in
+README.md). The Vite dev server proxies /api here; production serves the
+built frontend from frontend/dist as well.
 
 Run:
-  uv run python -m yt.server
+  uv run python -m src.server
 """
 
 from __future__ import annotations
@@ -26,18 +26,18 @@ from starlette import exceptions as starlette_exceptions
 from starlette import requests as starlette_requests
 import uvicorn
 
-from yt.studio import composer
-from yt.studio import config
-from yt.studio import director
-from yt.studio import edit_agent
-from yt.studio import fonts
-from yt.studio import gemini
-from yt.studio import ingestion
-from yt.studio import layout
-from yt.studio import models
-from yt.studio import prompts
-from yt.studio import storage
-from yt.studio import youtube
+from src import config
+from src import edit_agent
+from src import ingestion
+from src import models
+from src import storage
+from src import youtube
+from src.gemini import client as gemini_client
+from src.gemini import director
+from src.gemini import prompts
+from src.render import composer
+from src.render import fonts
+from src.render import layout
 
 app = fastapi.FastAPI(title='Agentic Shorts 생성 스튜디오 API')
 _settings = config.get_settings()
@@ -115,7 +115,7 @@ def studio_config(request: fastapi.Request) -> dict[str, Any]:
   sync handler in a worker thread, which keeps the token request off the
   event loop.
   """
-  setup_error = _settings.gemini_setup_error or gemini.credentials_error(
+  setup_error = _settings.gemini_setup_error or gemini_client.credentials_error(
       _settings
   )
   session = _current_session(request)

@@ -1,4 +1,4 @@
-/** HTTP client of the studio backend (routes live in yt/server.py). */
+/** HTTP client of the studio backend (routes live in src/server.py). */
 
 import type {
   AnalyzeEvent,

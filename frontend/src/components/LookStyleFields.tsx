@@ -13,7 +13,7 @@ import type {FontEntry, HeadlineStyle, LookStyle, TextStyle, VideoFit} from '../
 import {Icon} from './Icon';
 import {ColorField, IconButton, Section, SliderField, STATE_LAYER, Toggle} from './ui';
 
-// The same limits as TextStyle / LookStyle in yt/studio/models.py.
+// The same limits as TextStyle / LookStyle in src/models.py.
 const MIN_TEXT_SIZE = 16;
 const MAX_TEXT_SIZE = 200;
 const MAX_TEXT_OUTLINE = 12;

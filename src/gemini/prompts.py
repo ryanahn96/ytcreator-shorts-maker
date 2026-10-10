@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from yt.studio import models
+from src import models
 
 DEFAULT_EDITORIAL_PROMPT = """\
 당신은 정보성 롱폼 영상(강의, 강연, 인터뷰)을 9:16 세로 Shorts로 재구성하는 편집 \

@@ -2,7 +2,7 @@
  * Template geometry for the canvas preview.
  *
  * cropRect, fitAspect and videoBox mirror crop_rect, fit_aspect and
- * video_box in yt/studio/layout.py, so the preview frames exactly what
+ * video_box in src/render/layout.py, so the preview frames exactly what
  * ffmpeg renders.
  */
 
@@ -33,7 +33,7 @@ function evenFloor(value: number): number {
 /**
  * Smallest width and height of a custom video box in canvas units. 말로
  * 편집 checks the same minimum on the server (_MIN_VIDEO_BOX in
- * yt/studio/edit_agent.py).
+ * src/edit_agent.py).
  */
 export const MIN_VIDEO_BOX = 120;
 

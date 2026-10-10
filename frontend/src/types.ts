@@ -1,5 +1,5 @@
 /**
- * API contract of the studio backend. Mirrors yt/studio/models.py, whose
+ * API contract of the studio backend. Mirrors src/models.py, whose
  * pydantic models serialize to exactly these camelCase shapes.
  *
  * Terms follow CONTEXT.md: Source Video, Transcript Word, Editorial Prompt,
@@ -496,7 +496,7 @@ export interface StudioConfig {
 }
 
 /*
- * 말로 편집 (Edit Agent): POST /edit. Mirrors yt/studio/edit_agent.py.
+ * 말로 편집 (Edit Agent): POST /edit. Mirrors src/edit_agent.py.
  * Clips are named by Clip Number, counted from 1 as on screen when the
  * Edit Request was sent.
  */

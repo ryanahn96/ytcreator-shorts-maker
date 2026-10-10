@@ -30,17 +30,17 @@ from google.genai import errors as genai_errors
 from google.genai import types
 import httpx
 
-from yt.studio import config
-from yt.studio import gcp
-from yt.studio import gemini
-from yt.studio import ingestion
-from yt.studio import layout
-from yt.studio import models
-from yt.studio import pricing
-from yt.studio import prompts
-from yt.studio import speech
-from yt.studio import storage
-from yt.studio import youtube
+from src import config
+from src import gcp
+from src import ingestion
+from src import models
+from src import speech
+from src import storage
+from src import youtube
+from src.gemini import client as gemini_client
+from src.gemini import pricing
+from src.gemini import prompts
+from src.render import layout
 
 Emit = Callable[[dict[str, Any]], Awaitable[None]]
 # How one analysis asks Gemini (see prompts.py): the first analysis of a
@@ -404,7 +404,7 @@ async def run_gemini(
   thinking level of every call; None keeps the model's default.
   """
   settings = config.get_settings()
-  backend = gemini.label(settings)
+  backend = gemini_client.label(settings)
   schema = job.schema()
   regional = (
       settings.gemini_backend == 'vertex'
@@ -449,7 +449,9 @@ async def run_gemini(
         data = _parse_json(text)
       except google_auth_exceptions.GoogleAuthError as exc:
         # Credentials fail the same way for every model, so stop here.
-        raise DirectorError(gemini.auth_failure_message(settings, exc)) from exc
+        raise DirectorError(
+            gemini_client.auth_failure_message(settings, exc)
+        ) from exc
       except genai_errors.ClientError as exc:
         if exc.code in _AUTH_ERROR_CODES:
           if (
@@ -906,7 +908,7 @@ async def analyze(
     kind = 'deep'
   else:
     kind = request.mode
-  client = gemini.make_client(settings)
+  client = gemini_client.make_client(settings)
   cache = None
   if kind != 'fast':
     record = await asyncio.to_thread(workspace.load_video_cache, source_id)

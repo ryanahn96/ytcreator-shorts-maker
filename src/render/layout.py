@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 import typing
 
-from yt.studio import models
+from src import models
 
 
 @dataclasses.dataclass(frozen=True)

@@ -20,7 +20,7 @@ from google import auth as google_auth
 from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 
-from yt.studio import config
+from src import config
 
 logger = logging.getLogger(__name__)
 

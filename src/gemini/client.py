@@ -14,9 +14,9 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
 from google.genai import types
 
-from yt.studio import config
-from yt.studio import gcp
-from yt.studio import models
+from src import config
+from src import gcp
+from src import models
 
 _CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 _LABELS: dict[models.GeminiBackend, str] = {
