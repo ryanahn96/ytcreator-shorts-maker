@@ -25,12 +25,11 @@ _Avoid_: 편집 요청, System template, rule config
 
 **Analysis**:
 Source Video와 Editorial Prompt(및 연결된 YouTube Video Context)를 Gemini에 보내 Scenario들과 Transcript Word를 받아 오는 한 번의 실행. 첫 Analysis는 영상을 보고 전체 자막을 받아쓰며, 영상을 Context Cache에 올려 둔다. 다시 분석은 두 가지다: 보관한 전체 자막만으로 구간을 다시 고르는 Fast Re-analysis(기본, 몇 초)와 영상을 다시 보는 Deep Re-analysis(화면을 봐야 하는 요청용, 캐시가 살아 있으면 그것을 재사용). 다시 분석하면 새 Analysis의 결과가 이전 결과를 대신한다.
-_화면 표기_: 분석, 다시 분석. Fast는 "빠른 재분석 (자막)", Deep은 "화면 재탐색 (비디오 캐시)"
+_화면 표기_: 분석, 다시 분석. Fast는 "빠른 분석 (자막)", Deep은 "정밀 분석 (화면)"
 _Avoid_: Job, run, generation
 
 **Context Cache**:
-첫 Analysis 때 분석용 영상 사본을 Gemini에 미리 올려 두고 일정 시간(기본 1시간) 재사용하는 Gemini 기능. Deep Re-analysis가 캐시를 참조하면 영상 입력 토큰이 할인된다. 전체 자막은 토큰이 적어 캐시하지 않고 서버가 파일로 보관한다.
-_화면 표기_: 비디오 캐시
+첫 Analysis 때 분석용 영상 사본을 Gemini에 미리 올려 두고 일정 시간(기본 1시간) 재사용하는 Gemini 기능. Deep Re-analysis가 캐시를 참조하면 영상 입력 토큰이 할인된다. 전체 자막은 토큰이 적어 캐시하지 않고 서버가 파일로 보관한다. 화면에는 이름을 드러내지 않는다.
 _Avoid_: Prompt cache, KV cache
 
 **Analysis Cost**:
