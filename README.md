@@ -56,27 +56,35 @@
 
 ### 백엔드 (`src/`)
 
-`src/` 바로 아래에 엔드포인트, 설정, 말로 편집과 여러 기능이 함께 쓰는 모듈이 있고, Gemini 분석은
-`src/gemini/`, MP4 렌더는 `src/render/`에 있습니다.
+성격이 같은 코드끼리 폴더로 묶었습니다. Gemini에 보내는 글은 `src/prompts/`에 모여 있습니다.
 
 | 경로 | 역할 |
 | --- | --- |
 | `src/api/server.py` | FastAPI 엔드포인트 전부와 OAuth 세션 쿠키 확인 |
 | `src/core/config.py` | 환경 변수, 편집 기본값, 렌더 프로필(1080×1920), 기본 Look Style |
-| `src/edit_agent.py` | 말로 편집: 편집 요청과 보고 있는 Shorts, 보관한 전체 자막·시청 유지율로 Gemini(텍스트만, 생각 수준 LOW)에 편집 동작을 묻고, 동작을 검사해 범위 밖 값은 맞추거나 건너뛴 뒤 답 한 줄과 함께 돌려줌 |
-| `src/core/models.py` | 요청/응답 pydantic 모델 (camelCase 직렬화) |
-| `src/infra/storage.py` | 업로드 원본, 분석용 사본, 전체 자막, YouTube 컨텍스트, 캐시 정보, OAuth 세션, 이미지와 음악, 렌더 결과 보관. `STUDIO_GCS_BUCKET`이 있으면 GCS에 두고 로컬 디스크는 캐시로 씀 |
-| `src/youtube.py` | Google OAuth 2.0, YouTube Data API v3(채널·영상 목록·자막·Shorts 업로드), YouTube Analytics API v2(시청자 유지율 곡선·피크 추출) |
-| `src/media/ingestion.py` | ffprobe, silencedetect, 분석용 사본, Gemini 받아쓰기를 Transcript Word로 변환 |
-| `src/media/speech.py` | Cloud Speech-to-Text V2(`chirp_3`)로 원본 음성을 단어 단위 타임스탬프와 함께 받아쓰기 |
-| `src/infra/gcp.py` | ADC 토큰, 로컬에서 Vertex AI·Speech-to-Text API가 꺼져 있으면 켜기 |
+| `src/core/models.py` | 요청/응답 pydantic 모델 (camelCase 직렬화). 말로 편집의 `EditRequest`·`EditResponse`도 여기 |
+| `src/core/fonts.py`, `src/core/fonts/` | 저장소 글꼴 목록과 글꼴 파일, 글꼴 파일에서 읽는 줄 높이 비율 |
+| `src/prompts/analysis.py` | 기본 Shorts 생성 프롬프트, 분석 지시문, 첫 분석·빠른 재분석·화면 재탐색 요청문(시청자 유지율 피크 포함), 분석 응답 스키마 |
+| `src/prompts/edit_agent.py` | 말로 편집 지시문과 요청문(보고 있는 Shorts, 고른 클립, 재생 위치, 대화, 단어 번호를 붙인 전체 자막, 시청자 데이터, 올린 파일, 글꼴) |
 | `src/gemini/client.py` | API 키 또는 Vertex AI 클라이언트, ADC 토큰 확인 |
 | `src/gemini/director.py` | Gemini AGENTIC 호출, Context Cache 생성·재사용, 전체 자막 및 YouTube 컨텍스트 보관, 모델 대체 순서, 재시도, 응답 검증, 토큰 집계. 말로 편집도 여기의 `run_gemini`로 호출 |
-| `src/prompts/analysis.py` | 기본 Shorts 생성 프롬프트, 첫 분석·빠른 재분석·화면 재탐색 요청문(시청자 유지율 피크 포함), Gemini 응답 스키마 |
 | `src/gemini/pricing.py` | 모델별 정가표(확인 날짜와 출처 포함), 호출 비용과 캐시 쓰기 비용 계산 |
+| `src/edit_agent/agent.py` | 말로 편집 한 번: Gemini(텍스트만, 생각 수준 LOW)에 편집 동작을 묻고 검사 결과를 돌려줌 |
+| `src/edit_agent/checker.py` | 편집 동작 검사: 범위 밖 값은 맞추고 모르는 동작은 건너뛰며 참고 사항을 남김 |
+| `src/edit_agent/look_patch.py` | 스타일(Look) 패치 검사 |
+| `src/edit_agent/schema.py` | 말로 편집 응답 스키마(편집 동작 목록과 답 한 줄) |
+| `src/edit_agent/values.py` | 응답 값 읽기(숫자, 비율, 초, 색, 글꼴, 파일 이름)와 공용 한도 |
+| `src/youtube/oauth.py` | Google OAuth 2.0 로그인, 토큰 교환과 갱신, 채널 프로필 |
+| `src/youtube/videos.py` | 내 채널 롱폼 영상 목록 |
+| `src/youtube/video_context.py` | YouTube Video Context: YouTube Analytics API v2 시청자 유지율 곡선·많이 본/적게 본 구간, 댓글, 공식 자막 |
+| `src/youtube/shorts_upload.py` | 완성된 Shorts MP4를 내 채널에 이어 올리기(resumable upload) |
+| `src/youtube/common.py` | YouTube API 공용 HTTP 클라이언트, 인증 헤더, 오류 |
 | `src/render/composer.py` | 클라이언트가 보낸 Subcut을 프레임 단위로 맞춘 타임라인(하드 컷), ffmpeg 필터 그래프, ASS 생성 |
 | `src/render/layout.py` | 템플릿 기하(영상 박스, 크롭, 글자 기본 위치: 헤드라인은 박스 위, 자막은 박스 아래) |
-| `src/core/fonts.py`, `src/core/fonts/` | 저장소 글꼴 목록과 글꼴 파일, 글꼴 파일에서 읽는 줄 높이 비율 |
+| `src/media/ingestion.py` | ffprobe, silencedetect, 분석용 사본, 받아쓰기를 Transcript Word로 변환 |
+| `src/media/speech.py` | Cloud Speech-to-Text V2(`chirp_3`)로 원본 음성을 단어 단위 타임스탬프와 함께 받아쓰기 |
+| `src/infra/storage.py` | 업로드 원본, 분석용 사본, 전체 자막, YouTube 컨텍스트, 캐시 정보, OAuth 세션, 이미지와 음악, 렌더 결과 보관. `STUDIO_GCS_BUCKET`이 있으면 GCS에 두고 로컬 디스크는 캐시로 씀 |
+| `src/infra/gcp.py` | ADC 토큰, 로컬에서 Vertex AI·Speech-to-Text API가 꺼져 있으면 켜기 |
 
 ### API
 

@@ -496,7 +496,8 @@ export interface StudioConfig {
 }
 
 /*
- * 말로 편집 (Edit Agent): POST /edit. Mirrors src/edit_agent.py.
+ * 말로 편집 (Edit Agent): POST /edit. Mirrors the Edit models in
+ * src/core/models.py.
  * Clips are named by Clip Number, counted from 1 as on screen when the
  * Edit Request was sent.
  */

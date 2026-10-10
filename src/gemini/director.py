@@ -30,7 +30,6 @@ from google.genai import errors as genai_errors
 from google.genai import types
 import httpx
 
-from src import youtube
 from src.core import config
 from src.core import models
 from src.gemini import client as gemini_client
@@ -41,6 +40,8 @@ from src.media import ingestion
 from src.media import speech
 from src.prompts import analysis as analysis_prompt
 from src.render import layout
+from src.youtube import common as youtube_common
+from src.youtube import video_context
 
 Emit = Callable[[dict[str, Any]], Awaitable[None]]
 # How one analysis asks Gemini (see src/prompts/analysis.py): the first
@@ -728,13 +729,13 @@ async def _resolve_youtube_context(
   await emit(progress('youtube'))
   try:
     context = await asyncio.to_thread(
-        youtube.fetch_video_context, access_token, video_id, duration_sec
+        video_context.fetch_video_context, access_token, video_id, duration_sec
     )
     await asyncio.to_thread(
         workspace.save_youtube_context, source_id, context
     )
     return context
-  except youtube.YouTubeError as exc:
+  except youtube_common.YouTubeError as exc:
     warnings.append(f'YouTube 데이터를 불러오지 못해 영상만으로 진행합니다: {exc}')
     return stored
 

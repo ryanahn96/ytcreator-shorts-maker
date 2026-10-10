@@ -33,7 +33,7 @@ function evenFloor(value: number): number {
 /**
  * Smallest width and height of a custom video box in canvas units. 말로
  * 편집 checks the same minimum on the server (_MIN_VIDEO_BOX in
- * src/edit_agent.py).
+ * src/edit_agent/look_patch.py).
  */
 export const MIN_VIDEO_BOX = 120;
 

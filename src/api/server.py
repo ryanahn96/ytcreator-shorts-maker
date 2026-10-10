@@ -26,11 +26,10 @@ from starlette import exceptions as starlette_exceptions
 from starlette import requests as starlette_requests
 import uvicorn
 
-from src import edit_agent
-from src import youtube
 from src.core import config
 from src.core import fonts
 from src.core import models
+from src.edit_agent import agent as edit_agent
 from src.gemini import client as gemini_client
 from src.gemini import director
 from src.infra import storage
@@ -38,6 +37,11 @@ from src.media import ingestion
 from src.prompts import analysis as analysis_prompt
 from src.render import composer
 from src.render import layout
+from src.youtube import common as youtube_common
+from src.youtube import oauth
+from src.youtube import shorts_upload
+from src.youtube import video_context
+from src.youtube import videos
 
 app = fastapi.FastAPI(title='Agentic Shorts 생성 스튜디오 API')
 _settings = config.get_settings()
@@ -73,13 +77,13 @@ def _oauth_redirect_uri(request: fastapi.Request) -> str:
 
 def _current_session(request: fastapi.Request) -> models.OAuthSession | None:
   """Loads and refreshes the signed-in OAuth session from the cookie."""
-  session_id = request.cookies.get(youtube.SESSION_COOKIE, '').strip()
+  session_id = request.cookies.get(oauth.SESSION_COOKIE, '').strip()
   try:
     session = _workspace.load_session(session_id)
     if session is None:
       return None
-    return youtube.ensure_fresh_session(_settings, _workspace, session)
-  except (youtube.YouTubeError, storage.StorageError):
+    return oauth.ensure_fresh_session(_settings, _workspace, session)
+  except (youtube_common.YouTubeError, storage.StorageError):
     return None
 
 
@@ -140,7 +144,7 @@ def studio_config(request: fastapi.Request) -> dict[str, Any]:
       max_music_volume=models.MAX_MUSIC_VOLUME,
       font_warning=_settings.font_warning,
       gemini_setup_error=setup_error,
-      auth=youtube.auth_status(_settings, session),
+      auth=oauth.auth_status(_settings, session),
   ).to_json()
 
 
@@ -150,12 +154,12 @@ def auth_login(request: fastapi.Request) -> fastapi.Response:
   state = secrets.token_urlsafe(24)
   redirect_uri = _oauth_redirect_uri(request)
   try:
-    url = youtube.authorization_url(_settings, redirect_uri, state)
-  except youtube.YouTubeError as exc:
+    url = oauth.authorization_url(_settings, redirect_uri, state)
+  except youtube_common.YouTubeError as exc:
     return _error(str(exc), 500)
   response = responses.RedirectResponse(url, status_code=302)
   response.set_cookie(
-      key=youtube.STATE_COOKIE,
+      key=oauth.STATE_COOKIE,
       value=state,
       max_age=600,
       httponly=True,
@@ -177,7 +181,7 @@ def auth_callback(
   if error:
     msg = urllib_parse.quote(f'Google 로그인이 취소되었거나 실패했습니다: {error}')
     return responses.RedirectResponse(f'/?auth_error={msg}', status_code=302)
-  cookie_state = request.cookies.get(youtube.STATE_COOKIE, '').strip()
+  cookie_state = request.cookies.get(oauth.STATE_COOKIE, '').strip()
   if not code or not state or not cookie_state or state != cookie_state:
     msg = urllib_parse.quote(
         'OAuth 상태 검증에 실패했습니다. 다시 로그인해 주세요.'
@@ -186,16 +190,16 @@ def auth_callback(
   session_id = _workspace.new_session_id()
   redirect_uri = _oauth_redirect_uri(request)
   try:
-    session = youtube.exchange_code(_settings, code, redirect_uri, session_id)
+    session = oauth.exchange_code(_settings, code, redirect_uri, session_id)
     _workspace.save_session(session)
-  except (youtube.YouTubeError, storage.StorageError) as exc:
+  except (youtube_common.YouTubeError, storage.StorageError) as exc:
     msg = urllib_parse.quote(str(exc))
     return responses.RedirectResponse(f'/?auth_error={msg}', status_code=302)
 
   response = responses.RedirectResponse('/', status_code=302)
-  response.delete_cookie(key=youtube.STATE_COOKIE, path='/')
+  response.delete_cookie(key=oauth.STATE_COOKIE, path='/')
   response.set_cookie(
-      key=youtube.SESSION_COOKIE,
+      key=oauth.SESSION_COOKIE,
       value=session.session_id,
       max_age=_SESSION_MAX_AGE_SEC,
       httponly=True,
@@ -209,13 +213,13 @@ def auth_callback(
 @app.post('/api/shortform/auth/logout')
 def auth_logout(request: fastapi.Request) -> responses.JSONResponse:
   """Clears the creator's OAuth session cookie and stored token."""
-  session_id = request.cookies.get(youtube.SESSION_COOKIE, '').strip()
+  session_id = request.cookies.get(oauth.SESSION_COOKIE, '').strip()
   with contextlib.suppress(storage.StorageError):
     _workspace.discard_session(session_id)
   response = responses.JSONResponse(
-      youtube.auth_status(_settings, None).to_json()
+      oauth.auth_status(_settings, None).to_json()
   )
-  response.delete_cookie(key=youtube.SESSION_COOKIE, path='/')
+  response.delete_cookie(key=oauth.SESSION_COOKIE, path='/')
   return response
 
 
@@ -224,8 +228,8 @@ def youtube_videos(request: fastapi.Request) -> responses.JSONResponse:
   """Lists recent uploaded videos from the signed-in creator's channel."""
   session = _require_session(request)
   try:
-    result = youtube.list_channel_videos(session.access_token)
-  except youtube.YouTubeError as exc:
+    result = videos.list_channel_videos(session.access_token)
+  except youtube_common.YouTubeError as exc:
     return _error(str(exc), 502)
   return responses.JSONResponse(result.to_json())
 
@@ -240,8 +244,10 @@ def youtube_video_context(
   if not vid or len(vid) > 64:
     return _error('유효하지 않은 YouTube 영상 ID입니다.', 422)
   try:
-    ctx = youtube.fetch_video_context(session.access_token, vid, duration_sec)
-  except youtube.YouTubeError as exc:
+    ctx = video_context.fetch_video_context(
+        session.access_token, vid, duration_sec
+    )
+  except youtube_common.YouTubeError as exc:
     return _error(str(exc), 502)
   return responses.JSONResponse(ctx.to_json())
 
@@ -259,8 +265,8 @@ def youtube_upload(
   except storage.StorageError as exc:
     return _error(str(exc), 500)
   try:
-    result = youtube.upload_short(session.access_token, media_path, body)
-  except youtube.YouTubeError as exc:
+    result = shorts_upload.upload_short(session.access_token, media_path, body)
+  except youtube_common.YouTubeError as exc:
     return _error(str(exc), 502)
   return responses.JSONResponse(result.to_json())
 
@@ -330,7 +336,7 @@ async def analyze(
 
 @app.post('/api/shortform/edit')
 async def edit(
-    body: edit_agent.EditRequest, request: fastapi.Request
+    body: models.EditRequest, request: fastapi.Request
 ) -> responses.JSONResponse:
   """Answers one Edit Request (말로 편집) with checked edit operations.
 
