@@ -1,1 +1,1 @@
-"""FastAPI app: every HTTP endpoint of the studio."""
+"""FastAPI routers: the studio's endpoints, grouped by feature."""

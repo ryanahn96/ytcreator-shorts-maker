@@ -60,7 +60,15 @@
 
 | 경로 | 역할 |
 | --- | --- |
-| `src/api/server.py` | FastAPI 엔드포인트 전부와 OAuth 세션 쿠키 확인 |
+| `src/main.py` | FastAPI 앱: 라우터 묶기, 오류 응답 형식, 프론트 화면(SPA) 제공, 실행 진입점 (`python -m src.main`) |
+| `src/api/deps.py` | 라우터들이 같이 쓰는 설정, Workspace, 오류 응답, 로그인 세션 확인 |
+| `src/api/studio.py` | `/api/health`, 화면이 처음 받는 설정(`/config`), 글꼴 파일 |
+| `src/api/auth.py` | Google OAuth 2.0 로그인·콜백·로그아웃과 세션 쿠키 |
+| `src/api/youtube.py` | 채널 영상 목록, YouTube Video Context, Shorts 업로드 |
+| `src/api/uploads.py` | 원본 영상 업로드(직접 또는 GCS)와 이미지·음악·영상 파일 업로드 |
+| `src/api/analysis.py` | 분석(NDJSON 스트림) |
+| `src/api/edit.py` | 말로 편집 |
+| `src/api/render.py` | MP4 만들기와 렌더된 파일 |
 | `src/core/config.py` | 환경 변수, 편집 기본값, 렌더 프로필(1080×1920), 기본 Look Style |
 | `src/core/models.py` | 요청/응답 pydantic 모델 (camelCase 직렬화). 말로 편집의 `EditRequest`·`EditResponse`도 여기 |
 | `src/core/fonts.py`, `src/core/fonts/` | 저장소 글꼴 목록과 글꼴 파일, 글꼴 파일에서 읽는 줄 높이 비율 |
