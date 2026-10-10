@@ -74,10 +74,6 @@ class LookPatcher:
   def __init__(self, note: Callable[[str], None]) -> None:
     self._note = note
 
-  def clean(self, raw: Any) -> dict[str, Any]:
-    """Returns the checked patch; empty when nothing usable is left."""
-    return self._typed(director.as_dict(raw))
-
   def _numbers(
       self, raw: Any, group: str, ranges: dict[str, tuple[float, float]]
   ) -> dict[str, float]:
@@ -147,16 +143,17 @@ class LookPatcher:
       )
     return bounded
 
-  def _typed(self, data: dict[str, Any]) -> dict[str, Any]:
+  def clean(self, raw: Any) -> dict[str, Any]:
     """Keeps the Look keys of a raw patch, with the types the models use.
 
     Args:
-      data: The look object of a patchLook operation.
+      raw: The look object of a patchLook operation.
 
     Returns:
       The typed patch in the key order of Look.to_json; empty when the
       answer gave nothing usable. defaultBox wins over a box given with it.
     """
+    data = director.as_dict(raw)
     patch: dict[str, Any] = {}
     lines = director.as_dict(data.get('headline')).get('lines')
     if isinstance(lines, list):

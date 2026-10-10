@@ -44,3 +44,12 @@ def int_stat(stats: dict[str, object], key: str) -> int:
     return int(stats.get(key) or 0)
   except (TypeError, ValueError):
     return 0
+
+
+def thumbnail_url(thumbs: object, sizes: tuple[str, ...]) -> str:
+  data = as_dict(thumbs)
+  for key in sizes:
+    url = as_dict(data.get(key)).get('url')
+    if url:
+      return str(url).strip()
+  return ''

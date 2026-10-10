@@ -169,9 +169,7 @@ export function OverlayLayer(props: {
     event: PointerEvent<HTMLElement>,
     handle: BoxHandle,
   ) => {
-    const startBox = look.framingLayout.box
-      ? clampVideoBox(style, look.framingLayout.box)
-      : videoBox(style, style.canvasWidth);
+    const startBox = videoBox(style, style.canvasWidth, look.framingLayout);
     const right = startBox.x + startBox.width;
     const bottom = startBox.y + startBox.height;
     drag(

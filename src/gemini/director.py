@@ -134,13 +134,9 @@ class GeminiRun:
   cost_usd: float | None
 
 
-def progress(stage: str, message: str = '') -> dict[str, Any]:
-  """Builds a progress event for the analyze stream.
-
-  The UI shows a fixed status line per stage; only 'thought' events carry
-  text (the model's latest thought summary).
-  """
-  return {'type': 'progress', 'stage': stage, 'message': message}
+def progress(stage: str) -> dict[str, Any]:
+  """Builds a progress event for the analyze stream."""
+  return {'type': 'progress', 'stage': stage}
 
 
 # --------------------------------------------------------------------------
@@ -160,17 +156,13 @@ def clean_text(value: Any) -> str:
   return value.strip() if isinstance(value, str) else ''
 
 
-def _float(value: Any) -> float | None:
-  if value is None or isinstance(value, bool):
+def as_float(value: Any) -> float | None:
+  if isinstance(value, bool) or not isinstance(value, (int, float, str)):
     return None
-  if isinstance(value, (int, float)):
+  try:
     return float(value)
-  if isinstance(value, str):
-    try:
-      return float(value.strip())
-    except ValueError:
-      return None
-  return None
+  except ValueError:
+    return None
 
 
 def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
@@ -195,7 +187,7 @@ def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
         value = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
       else:
         return None
-  num = _float(value)
+  num = as_float(value)
   if num is None:
     return None
 
@@ -249,9 +241,8 @@ async def _stream_once(
     model: str,
     contents: list[Any],
     generation_config: types.GenerateContentConfig,
-    emit: Emit,
 ) -> tuple[str, types.GenerateContentResponseUsageMetadata | None]:
-  """Streams one generation and reports its thoughts.
+  """Streams one generation.
 
   Returns:
     The answer text and the call's usage. Usage is not split across chunks:
@@ -270,10 +261,7 @@ async def _stream_once(
         # part of the answer.
         if part.tool_call is not None or part.tool_response is not None:
           continue
-        if part.thought:
-          if part.text:
-            await emit(progress('thought', part.text[:_PREVIEW_CHARS]))
-        elif part.text:
+        if not part.thought and part.text:
           texts.append(part.text)
     if chunk.usage_metadata is not None:
       usage = chunk.usage_metadata
@@ -442,7 +430,7 @@ async def run_gemini(
       await emit(progress('gemini'))
       try:
         text, usage = await _stream_once(
-            client, model, contents, generation_config, emit
+            client, model, contents, generation_config
         )
         # Priced before parsing, since an unusable answer is billed too.
         costs.append(
@@ -525,8 +513,8 @@ async def run_gemini(
 
 def _crop(raw: Any) -> models.CropRegion:
   data = as_dict(raw)
-  center_x = _float(data.get('centerX'))
-  center_y = _float(data.get('centerY'))
+  center_x = as_float(data.get('centerX'))
+  center_y = as_float(data.get('centerY'))
   # Keep initial scenario zoom at 1.0 so the source frame is never degraded
   # by automatic digital zoom; center_x/center_y still guide aspect crops.
   return models.CropRegion(

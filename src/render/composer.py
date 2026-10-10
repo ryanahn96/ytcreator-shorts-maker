@@ -234,10 +234,8 @@ def build_timeline(
       )
   cues.sort(key=lambda item: item.start)
   trimmed = []
-  for index, cue in enumerate(cues):
-    end = cue.end
-    if index + 1 < len(cues):
-      end = min(end, cues[index + 1].start)
+  for cue, after in zip(cues, [*cues[1:], None]):
+    end = min(cue.end, after.start) if after else cue.end
     if end - cue.start >= frame:
       trimmed.append(dataclasses.replace(cue, end=end))
   return Timeline(

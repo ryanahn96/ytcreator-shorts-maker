@@ -24,18 +24,10 @@ KIND_LABELS = {'image': '이미지', 'audio': '음악', 'video': '영상'}
 
 def read_number(value: Any) -> float | None:
   """Reads a finite number, also from a numeric string."""
-  if value is None or isinstance(value, bool):
-    return None
-  if isinstance(value, (int, float)):
-    number = float(value)
-  elif isinstance(value, str):
-    try:
-      number = float(value.strip().removesuffix('%'))
-    except ValueError:
-      return None
-  else:
-    return None
-  return number if math.isfinite(number) else None
+  if isinstance(value, str):
+    value = value.strip().removesuffix('%')
+  number = director.as_float(value)
+  return number if number is not None and math.isfinite(number) else None
 
 
 def read_fraction(value: Any) -> float | None:
@@ -86,9 +78,6 @@ def ms(seconds: float) -> float:
 def half_up(value: float) -> int:
   """Rounds .5 away from zero, as people do (Python's round() does not)."""
   return math.floor(abs(value) + 0.5) * (1 if value >= 0 else -1)
-
-
-
 
 
 def read_hex_color(value: Any) -> str | None:

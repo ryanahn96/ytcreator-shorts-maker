@@ -44,10 +44,7 @@ export function useAnalysis(onResult: (result: AnalysisResult) => void) {
         }
         switch (event.type) {
           case 'progress':
-            // A 'thought' event carries the model's thinking, which no screen shows.
-            if (event.stage !== 'thought') {
-              setState({status: 'running', progress: {stage: event.stage, startedAt}});
-            }
+            setState({status: 'running', progress: {stage: event.stage, startedAt}});
             break;
           case 'heartbeat':
             break;

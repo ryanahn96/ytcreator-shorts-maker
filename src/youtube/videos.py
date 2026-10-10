@@ -46,15 +46,6 @@ def _has_shorts_tag(title: str, description: str, tags: Sequence[str]) -> bool:
   )
 
 
-def _pick_thumbnail_url(thumbs: dict[str, object]) -> str:
-  """Picks the highest-resolution 16:9 thumbnail URL available."""
-  for key in ('maxres', 'standard', 'high', 'medium', 'default'):
-    entry = thumbs.get(key)
-    if isinstance(entry, dict) and entry.get('url'):
-      return str(entry['url']).strip()
-  return ''
-
-
 def video_item(
     raw: dict[str, object], untitled: str | None = None
 ) -> models.YouTubeVideoItem:
@@ -74,13 +65,13 @@ def video_item(
   stats = common.as_dict(raw.get('statistics'))
   status = common.as_dict(raw.get('status'))
   fallback_title = vid if untitled is None else untitled
-  thumbs = snippet.get('thumbnails')
   return models.YouTubeVideoItem(
       video_id=vid,
       title=str(snippet.get('title') or fallback_title).strip(),
       description=str(snippet.get('description') or '').strip(),
-      thumbnail_url=(
-          _pick_thumbnail_url(thumbs) if isinstance(thumbs, dict) else ''
+      thumbnail_url=common.thumbnail_url(
+          snippet.get('thumbnails'),
+          ('maxres', 'standard', 'high', 'medium', 'default'),
       ),
       published_at=str(snippet.get('publishedAt') or '').strip(),
       duration_sec=parse_iso_duration(str(content.get('duration') or '')),

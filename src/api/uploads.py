@@ -38,12 +38,11 @@ async def upload_source_init(
   """Initializes a direct GCS resumable upload session when configured."""
   await asyncio.to_thread(deps.require_session, request)
   _schedule_purge()
-  filename = pathlib.PurePath(body.filename).name or 'source.mp4'
   origin = request.headers.get('origin', '').strip()
   try:
     session = await asyncio.to_thread(
         deps.workspace.init_source_upload,
-        filename,
+        body.filename,
         body.size_bytes,
         body.content_type,
         origin,
@@ -112,12 +111,11 @@ async def upload_source(request: fastapi.Request) -> responses.JSONResponse:
   filename = urllib_parse.unquote(request.headers.get('x-filename', ''))
   filename = pathlib.PurePath(filename).name or 'source.mp4'
   source_id, path = deps.workspace.new_source(filename)
-  size = 0
   try:
     with path.open('wb', buffering=16 * 1024 * 1024) as handle:
       async for chunk in request.stream():
         handle.write(chunk)
-        size += len(chunk)
+    size = path.stat().st_size
     if size == 0:
       raise ingestion.IngestionError('빈 파일이 업로드되었습니다.')
     media, has_audio = await asyncio.to_thread(
@@ -156,12 +154,11 @@ async def upload_asset(
     asset_id, path = deps.workspace.new_asset(kind, filename)
   except ValueError as exc:
     return deps.error(str(exc), 422)
-  size = 0
   try:
     with path.open('wb') as handle:
       async for chunk in request.stream():
         handle.write(chunk)
-        size += len(chunk)
+    size = path.stat().st_size
     if size == 0:
       raise ingestion.IngestionError('빈 파일이 업로드되었습니다.')
     width, height, duration, has_audio = await asyncio.to_thread(

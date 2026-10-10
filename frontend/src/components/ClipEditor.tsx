@@ -214,12 +214,8 @@ function ImageClipEditor(props: {
   const duration = Math.max(0.5, roundMs(clip.endSec - clip.startSec));
   const url = clip.assetId ? assets.urls.get(clip.assetId) : undefined;
   const record = clip.assetId ? assets.records.get(clip.assetId) : undefined;
-  const setDuration = (sec: number) =>
-    dispatch({
-      type: 'setClipRange',
-      index,
-      range: {startSec: 0, endSec: roundMs(Math.max(0.5, Math.min(60, sec)))},
-    });
+  const setDuration = (endSec: number) =>
+    dispatch({type: 'setClipRange', index, range: {startSec: 0, endSec}});
   return (
     <div className="space-y-3 px-4 pt-2 pb-4">
       <ClipToolbar index={index} count={count} splitAt={null} dispatch={dispatch} />

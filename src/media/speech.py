@@ -449,12 +449,11 @@ def transcribe_video(
     SpeechError: If audio extraction or the Speech-to-Text V2 call fails.
   """
   settings = config.get_settings()
-  ok, err = gcp.ensure_service_enabled(
+  if err := gcp.ensure_service_enabled(
       settings.speech_project,
       gcp.SPEECH_API_SERVICE,
       display_name='Cloud Speech-to-Text',
-  )
-  if not ok:
+  ):
     raise SpeechError(err)
   chunks = plan_audio_chunks(duration_sec, silences)
   if not chunks:

@@ -89,10 +89,10 @@ export function useJumpCutPlayback(
     outputSec: 0,
   });
 
-  const stopLoop = useCallback(() => {
-    cancelAnimationFrame(loop.current.frame);
-    loop.current.frame = 0;
-  }, []);
+  const stopLoop = useCallback(
+    () => cancelAnimationFrame(loop.current.frame),
+    [],
+  );
 
   const activateSegment = useCallback(
     (
@@ -151,31 +151,27 @@ export function useJumpCutPlayback(
     [segments, video, extVideo, assetUrls],
   );
 
-  // An edit or a new element invalidates the running sequence. The paused
-  // video then shows the frame at the playhead.
-  useEffect(() => {
-    stopLoop();
-    setPlaying(false);
-    video?.pause();
-    extVideo?.pause();
-    const state = loop.current;
-    state.outputSec = Math.min(state.outputSec, totalSec(segments));
-    state.index = Math.min(state.index, Math.max(0, segments.length - 1));
-    setOutputSec(state.outputSec);
-    const located = locateOutput(segments, state.outputSec);
-    if (located) {
-      activateSegment(located.index, located.sourceSec, false);
-    }
-  }, [video, extVideo, segments, stopLoop, activateSegment]);
-
-  useEffect(() => stopLoop, [stopLoop]);
-
   const pause = useCallback(() => {
     stopLoop();
     video?.pause();
     extVideo?.pause();
     setPlaying(false);
   }, [video, extVideo, stopLoop]);
+
+  // An edit or a new element invalidates the running sequence. The paused
+  // video then shows the frame at the playhead.
+  useEffect(() => {
+    pause();
+    const state = loop.current;
+    state.outputSec = Math.min(state.outputSec, totalSec(segments));
+    setOutputSec(state.outputSec);
+    const located = locateOutput(segments, state.outputSec);
+    if (located) {
+      activateSegment(located.index, located.sourceSec, false);
+    }
+  }, [pause, segments, activateSegment]);
+
+  useEffect(() => stopLoop, [stopLoop]);
 
   const play = useCallback(() => {
     const total = totalSec(segments);
@@ -241,7 +237,6 @@ export function useJumpCutPlayback(
           video.pause();
           extVideo?.pause();
           state.outputSec = total;
-          state.frame = 0;
           setOutputSec(total);
           setPlaying(false);
           return;

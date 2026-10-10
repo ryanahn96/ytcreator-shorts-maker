@@ -320,7 +320,7 @@ export interface AnalyzeRequest {
 
 /** One NDJSON event of the analyze stream. */
 export type AnalyzeEvent =
-  | {type: 'progress'; stage: string; message: string}
+  | {type: 'progress'; stage: string}
   | {type: 'heartbeat'}
   | {type: 'result'; result: AnalysisResult}
   | {type: 'error'; error: string};

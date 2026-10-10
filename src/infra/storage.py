@@ -14,7 +14,6 @@ leaves the local disk, which is how local development runs.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import mimetypes
 import pathlib
 import secrets
@@ -156,27 +155,17 @@ class _Bucket:
 
   def upload(self, name: str, path: pathlib.Path) -> None:
     """Uploads a local file as an object, replacing any earlier one."""
-    size = path.stat().st_size
     content_type = (
         mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
     )
-
-    def chunks() -> Iterator[bytes]:
-      with path.open('rb') as handle:
-        while block := handle.read(_CHUNK_BYTES):
-          yield block
-
     try:
-      response = self._http.post(
-          f'{_GCS_UPLOAD_API}/{self._name}/o',
-          params={'uploadType': 'media', 'name': name},
-          headers={
-              **self._headers(),
-              'Content-Type': content_type,
-              'Content-Length': str(size),
-          },
-          content=chunks(),
-      )
+      with path.open('rb') as handle:
+        response = self._http.post(
+            f'{_GCS_UPLOAD_API}/{self._name}/o',
+            params={'uploadType': 'media', 'name': name},
+            headers={**self._headers(), 'Content-Type': content_type},
+            content=handle,
+        )
       response.raise_for_status()
     except (httpx.HTTPError, google_auth_exceptions.GoogleAuthError) as exc:
       raise StorageError(

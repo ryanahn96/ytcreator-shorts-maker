@@ -74,10 +74,7 @@ def upload_short(
       raise common.YouTubeError(
           common.api_error_message(put_resp, 'YouTube 영상 업로드에 실패했습니다')
       )
-    body = put_resp.json()
-    video_id = (
-        str(body.get('id') or '').strip() if isinstance(body, dict) else ''
-    )
+    video_id = str(common.as_dict(put_resp.json()).get('id') or '').strip()
     if not video_id:
       raise common.YouTubeError('YouTube 업로드 응답에 영상 ID가 없습니다.')
 

@@ -633,11 +633,6 @@ class Checker:
       return None if found is None else {'target': 'clip', 'clip': found[0]}
     return {'target': 'shared'}
 
-  def _look_of(self, target: dict[str, Any]) -> models.Look:
-    number = target.get('clip')
-    clip = self._clips[number - 1] if number is not None else None
-    return clip.look if clip is not None and clip.look else self._scenario.look
-
   def _patch_look(self, data: dict[str, Any]) -> dict[str, Any] | None:
     target = self._target(data)
     if target is None:
@@ -721,7 +716,7 @@ class Checker:
     if target is None:
       return None
     if 'clip' in target:
-      looks = [self._look_of(target)]
+      looks = [self._clips[target['clip'] - 1].look or self._scenario.look]
     else:
       looks = [self._scenario.look, *(c.look for c in self._clips if c.look)]
     if not any(
@@ -859,11 +854,10 @@ class Checker:
     Word edits are transcript-wide, so a word outside this Shorts would
     change other Shorts only. Spans include the ones this answer adds.
     """
-    spans = sorted(self._spans)
 
     def inside(index: int) -> bool:
       start = self._by_index[index].start_sec
-      return any(low <= start < high for low, high in spans)
+      return any(low <= start < high for low, high in self._spans)
 
     kept = []
     for operation in operations:

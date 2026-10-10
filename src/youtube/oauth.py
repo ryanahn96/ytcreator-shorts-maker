@@ -81,13 +81,9 @@ def _fetch_creator_profile(
   items = ch_data.get('items')
   first = items[0] if isinstance(items, list) and items else None
   snippet = common.as_dict(common.as_dict(first).get('snippet'))
-  thumbs = common.as_dict(snippet.get('thumbnails'))
-  channel_thumb = ''
-  for key in ('default', 'medium', 'high'):
-    entry = thumbs.get(key)
-    if isinstance(entry, dict) and entry.get('url'):
-      channel_thumb = str(entry['url']).strip()
-      break
+  channel_thumb = common.thumbnail_url(
+      snippet.get('thumbnails'), ('default', 'medium', 'high')
+  )
   email = str(info.get('email') or '').strip()
   channel_title = str(snippet.get('title') or '').strip()
   return models.CreatorProfile(

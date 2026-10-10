@@ -60,6 +60,7 @@ import {
   PreviewStage,
   type PlaybackState,
   type PreviewCommand,
+  type PreviewCommandInput,
   type SourceSeekRequest,
 } from './preview/PreviewStage';
 import {ScenarioAudioControls} from './ScenarioAudioControls';
@@ -181,7 +182,7 @@ function ScenarioList(props: {
   return (
     <section
       aria-label="시나리오"
-      className="scenario-strip relative flex items-center gap-2 rounded-3xl bg-surface-container-low px-2 py-2"
+      className="scenario-strip relative mb-3 flex items-center gap-2 rounded-3xl bg-surface-container-low px-2 py-2"
     >
       <span className="hidden shrink-0 ps-2 pe-1 text-xs font-medium text-on-surface-variant sm:inline">
         시나리오 {scenarios.length}개
@@ -291,14 +292,7 @@ function YouTubeInsightsPanel(props: {
     dispatch,
   } = props;
 
-  const hasAnyData =
-    Boolean(youtubeVideoId) ||
-    retentionPoints.length > 0 ||
-    retentionPeaks.length > 0 ||
-    retentionLows.length > 0 ||
-    comments.length > 0;
-
-  if (!hasAnyData) {
+  if (!youtubeVideoId) {
     return (
       <div className="rounded-2xl bg-surface p-5 text-center">
         <p className="text-sm text-on-surface-variant">
@@ -318,19 +312,17 @@ function YouTubeInsightsPanel(props: {
 
   return (
     <div className="space-y-4">
-      {youtubeVideoId && (
-        <div className="flex justify-end">
-          <a
-            href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-          >
-            YouTube에서 열기
-            <Icon name="open_in_new" size={14} />
-          </a>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <a
+          href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          YouTube에서 열기
+          <Icon name="open_in_new" size={14} />
+        </a>
+      </div>
 
       {/* Audience Retention Curve */}
       <div className="space-y-2 rounded-2xl bg-surface p-4">
@@ -366,12 +358,10 @@ function YouTubeInsightsPanel(props: {
                 key={idx}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary-container/60 p-3 text-xs text-on-secondary-container"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold tabular-nums">
-                    {formatClock(peak.startSec)} – {formatClock(peak.endSec)} ·
-                    유지율 {Math.round(peak.watchRatio * 100)}%
-                  </p>
-                </div>
+                <p className="min-w-0 flex-1 font-semibold tabular-nums">
+                  {formatClock(peak.startSec)} – {formatClock(peak.endSec)} ·
+                  유지율 {Math.round(peak.watchRatio * 100)}%
+                </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     variant="text"
@@ -411,12 +401,10 @@ function YouTubeInsightsPanel(props: {
                 key={idx}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-error-container/55 p-3 text-xs text-on-error-container"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold tabular-nums">
-                    {formatClock(low.startSec)} – {formatClock(low.endSec)} ·
-                    유지율 {Math.round(low.watchRatio * 100)}%
-                  </p>
-                </div>
+                <p className="min-w-0 flex-1 font-semibold tabular-nums">
+                  {formatClock(low.startSec)} – {formatClock(low.endSec)} ·
+                  유지율 {Math.round(low.watchRatio * 100)}%
+                </p>
                 <Button
                   variant="text"
                   size="sm"
@@ -472,10 +460,7 @@ function YouTubeInsightsPanel(props: {
                       type="button"
                       onClick={() =>
                         comment.timestampSec !== null &&
-                        addSpanAsClip(
-                          Math.max(0, comment.timestampSec - 2),
-                          comment.timestampSec + 12,
-                        )
+                        addSpanAsClip(comment.timestampSec - 2, comment.timestampSec + 12)
                       }
                       className="rounded-lg bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/25"
                     >
@@ -604,9 +589,6 @@ function ToolTabs(props: {
     </section>
   );
 }
-
-/** A PreviewCommand before it gets its sequence number. */
-type PreviewCommandInput = {kind: 'pause'} | {kind: 'seekClip'; clipIndex: number};
 
 export function EditorScreen(props: {
   config: StudioConfig;
@@ -746,14 +728,13 @@ export function EditorScreen(props: {
       return;
     }
     const {scenarioId} = scenario;
-    const key = planKey;
     const update = (job: RenderJob) =>
       setJobs((current) => ({...current, [scenarioId]: job}));
-    update({status: 'running', planKey: key});
+    update({status: 'running', planKey});
     renderPlan({sourceId: source.sourceId, plan, quality: renderQuality}).then(
-      (output) => update({status: 'done', planKey: key, output}),
+      (output) => update({status: 'done', planKey, output}),
       (error: unknown) =>
-        update({status: 'failed', planKey: key, error: errorMessage(error)}),
+        update({status: 'failed', planKey, error: errorMessage(error)}),
     );
   };
 
@@ -978,15 +959,13 @@ export function EditorScreen(props: {
         )}
         {scenario && resolved ? (
           <>
-          <div className="mb-3">
-            <ScenarioList
-              scenarios={state.scenarios}
-              original={state.original}
-              durations={resolvedAll.map((item) => item.durationSec)}
-              index={state.scenarioIndex}
-              onSelect={(index) => dispatch({type: 'selectScenario', index})}
-            />
-          </div>
+          <ScenarioList
+            scenarios={state.scenarios}
+            original={state.original}
+            durations={resolvedAll.map((item) => item.durationSec)}
+            index={state.scenarioIndex}
+            onSelect={(index) => dispatch({type: 'selectScenario', index})}
+          />
           <div className="editor-grid">
             <div className="editor-clips space-y-4">
               <ClipEditor

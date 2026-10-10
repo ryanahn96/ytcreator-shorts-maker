@@ -52,13 +52,12 @@ export function clampVideoBox(
 /** Width / height of the area the video fills. */
 export function fitAspect(
   style: TemplateStyle,
-  framing: FramingLayout | VideoFit,
+  framing: FramingLayout,
 ): number {
-  const fit = typeof framing === 'string' ? framing : framing.fit;
-  if (fit === 'full') {
+  if (framing.fit === 'full') {
     return style.canvasWidth / style.canvasHeight;
   }
-  if (typeof framing !== 'string' && framing.box) {
+  if (framing.box) {
     const clamped = clampVideoBox(style, framing.box);
     return clamped.width / clamped.height;
   }

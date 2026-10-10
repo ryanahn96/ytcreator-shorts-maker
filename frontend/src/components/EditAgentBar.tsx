@@ -31,8 +31,6 @@ const MAX_REQUEST_CHARS = 2000;
 /** Room kept between the widget and the controls under it, in pixels. */
 const GAP_PX = 32;
 
-const CHIP = 'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium';
-
 interface EntryView {
   entry: EditAgentEntry;
   /** The entry's edit is the newest undo step, so 되돌리기 undoes it. */
@@ -45,7 +43,7 @@ interface EntryView {
 
 function RevertedChip() {
   return (
-    <span className={`${CHIP} bg-surface-container-highest text-on-surface-variant`}>
+    <span className="shrink-0 rounded-full bg-surface-container-highest px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
       되돌림
     </span>
   );
@@ -169,14 +167,12 @@ export function EditAgentBar(props: {
     setCollapsed(true);
   };
 
-  const send = (value: string): boolean => {
+  const send = (value: string) => {
     const request = value.trim().slice(0, MAX_REQUEST_CHARS);
-    if (request === '' || !props.onSend(request)) {
-      return false;
+    if (request !== '' && props.onSend(request)) {
+      setText('');
+      speech.clearError();
     }
-    setText('');
-    speech.clearError();
-    return true;
   };
 
   const speech = useSpeechInput({

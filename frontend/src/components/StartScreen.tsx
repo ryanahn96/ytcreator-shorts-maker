@@ -286,27 +286,26 @@ function YouTubeChannelLinkSection(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUploadedFile]);
 
+  // Videos are already sorted by newest publishedAt first.
+  const newestMatchedVideoId =
+    durationSec > 0
+      ? (videos?.find((v) => isDurationMatched(v.durationSec, durationSec))
+          ?.videoId ?? '')
+      : '';
+
   // Auto-select the newest upload whose duration matches the uploaded file.
   useEffect(() => {
     if (
-      durationSec <= 0 ||
-      !videos ||
-      videos.length === 0 ||
+      !newestMatchedVideoId ||
       autoMatchedDurationRef.current === durationSec
     ) {
       return;
     }
     autoMatchedDurationRef.current = durationSec;
-    if (videoId.trim()) {
-      return;
+    if (!videoId.trim()) {
+      onChange(newestMatchedVideoId);
     }
-    const matched = videos.find((item) =>
-      isDurationMatched(item.durationSec, durationSec),
-    );
-    if (matched) {
-      onChange(matched.videoId);
-    }
-  }, [durationSec, videos, videoId, onChange]);
+  }, [durationSec, newestMatchedVideoId, videoId, onChange]);
 
   useEffect(() => {
     setManualInput(videoId);
@@ -337,12 +336,6 @@ function YouTubeChannelLinkSection(props: {
     };
   }, [videoId, durationSec]);
 
-  // Videos are already sorted by newest publishedAt first.
-  const newestMatchedVideoId =
-    durationSec > 0 && videos
-      ? (videos.find((v) => isDurationMatched(v.durationSec, durationSec))
-          ?.videoId ?? '')
-      : '';
   const selectedItem =
     videos?.find((item) => item.videoId === videoId) ?? null;
   const linkedDurationSec =
@@ -474,7 +467,7 @@ function YouTubeChannelLinkSection(props: {
                   </span>
                   <span>
                     피크 {context.retentionPeaks.length} · 이탈{' '}
-                    {(context.retentionLows ?? []).length}
+                    {context.retentionLows.length}
                   </span>
                 </div>
                 <RetentionSparkline
@@ -492,7 +485,7 @@ function YouTubeChannelLinkSection(props: {
 
             {/* High-retention peaks & Low-retention drop-offs */}
             {(context.retentionPeaks.length > 0 ||
-              (context.retentionLows ?? []).length > 0) && (
+              context.retentionLows.length > 0) && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
@@ -528,11 +521,11 @@ function YouTubeChannelLinkSection(props: {
                     <Icon name="warning" size={16} className="text-error" />
                     이탈 구간
                   </p>
-                  {(context.retentionLows ?? []).length === 0 ? (
+                  {context.retentionLows.length === 0 ? (
                     <p className="text-xs text-on-surface-variant">없음</p>
                   ) : (
                     <div className="space-y-1.5">
-                      {(context.retentionLows ?? []).map((low, index) => (
+                      {context.retentionLows.map((low, index) => (
                         <div
                           key={index}
                           className="rounded-lg bg-error-container/60 px-3 py-2 text-xs text-on-error-container"
@@ -557,13 +550,13 @@ function YouTubeChannelLinkSection(props: {
             {/* Viewer comments */}
             <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
               <p className="text-xs font-semibold text-on-surface">
-                댓글 {(context.comments ?? []).length}개
+                댓글 {context.comments.length}개
               </p>
-              {(context.comments ?? []).length === 0 ? (
+              {context.comments.length === 0 ? (
                 <p className="text-xs text-on-surface-variant">없음</p>
               ) : (
                 <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                  {(context.comments ?? []).map((comment) => (
+                  {context.comments.map((comment) => (
                     <div
                       key={comment.commentId}
                       className="rounded-lg bg-surface p-2.5 text-xs"
@@ -614,8 +607,7 @@ function YouTubeChannelLinkSection(props: {
                     item.durationSec,
                     durationSec,
                   );
-                  const isNewestMatch =
-                    durationMatched && item.videoId === newestMatchedVideoId;
+                  const isNewestMatch = item.videoId === newestMatchedVideoId;
                   return (
                     <div
                       key={item.videoId}
@@ -658,14 +650,11 @@ function YouTubeChannelLinkSection(props: {
 
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {isNewestMatch && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-on-primary">
-                              자동 매칭
-                            </span>
-                          )}
-                          {!isNewestMatch && durationMatched && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/85 px-2.5 py-0.5 text-[11px] font-semibold text-on-primary">
-                              길이 일치
+                          {durationMatched && (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full ${isNewestMatch ? 'bg-primary' : 'bg-primary/85'} px-2.5 py-0.5 text-[11px] font-semibold text-on-primary`}
+                            >
+                              {isNewestMatch ? '자동 매칭' : '길이 일치'}
                             </span>
                           )}
                           <span className="rounded-full bg-surface-container-highest px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
@@ -786,7 +775,6 @@ function DropZone(props: {
       <FilePicker
         label="파일 선택"
         accept={VIDEO_ACCEPT}
-        busy={false}
         icon="movie"
         variant="filled"
         size="md"
@@ -850,7 +838,6 @@ function FileCard(props: {
         <FilePicker
           label="다른 파일"
           accept={VIDEO_ACCEPT}
-          busy={false}
           icon="upload"
           variant="text"
           size="md"

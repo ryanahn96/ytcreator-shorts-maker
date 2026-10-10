@@ -376,7 +376,7 @@ export function Toggle(props: {
 export function FilePicker(props: {
   label: string;
   accept: string;
-  busy: boolean;
+  busy?: boolean;
   icon: IconName;
   variant?: ButtonVariant;
   size?: keyof typeof BUTTON_SIZES;
