@@ -355,14 +355,14 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 
 스크립트는 이 순서로 움직여요.
 
-1. `.env`에서 프로젝트와 OAuth 값을 읽어요. 프로젝트 기본값은 `.env`의 `GOOGLE_CLOUD_PROJECT`, 없으면 `ytcreator-508301`이에요. 리전은 `asia-northeast3`, 서비스 이름은 `ytcreator`예요.
+1. `.env`에서 프로젝트, 리전, 서비스 이름, 저장소 이름, OAuth 값을 읽어요. 하드코딩된 기본값은 없고 모두 `.env` 또는 환경 변수에서 가져와요. 프로젝트는 `GOOGLE_CLOUD_PROJECT` 또는 `PROJECT_ID`를 읽어요.
 2. 필요한 API를 켜고 Cloud Build 서비스 계정에 권한을 줘요.
 3. 예전에 손으로 만든 서비스 계정, 저장소, 버킷, Cloud Run 서비스가 있으면 Terraform 상태로 가져와요.
 4. Artifact Registry 저장소를 먼저 만들고 `gcloud builds submit`으로 이미지를 빌드해요.
 5. 이미지 digest로 `terraform apply`를 해요. 그래서 같은 태그로 다시 빌드해도 새 리비전이 나가요.
 6. 서비스 URL과 OAuth 리디렉션 URI로 등록할 주소를 알려 줘요. 이 주소를 OAuth 클라이언트에 넣으세요.
 
-프로젝트, 리전, 서비스 이름, 저장소 이름은 환경 변수 `PROJECT_ID`, `REGION`, `SERVICE`, `REPOSITORY`로 바꿔요. 스크립트가 이 넷을 `-var`로 넘겨서 `terraform.tfvars`에 적어도 소용없어요. CPU, 메모리, 인스턴스 수, 보관 일수는 `TF_VAR_*` 환경 변수나 `terraform/terraform.tfvars`로 바꾸고, [terraform.tfvars.example](terraform/terraform.tfvars.example)을 복사해 쓰면 돼요. OAuth 값은 `terraform.tfvars`에 넣지 마세요. Terraform에서는 `terraform.tfvars`가 `TF_VAR_*`보다 앞서서 `.env`에서 넘긴 값을 덮어써요. Terraform 상태는 `terraform/terraform.tfstate`에 로컬로 두고 git에 넣지 않아요.
+프로젝트, 리전, 서비스 이름, 저장소 이름은 `.env`에 적거나 환경 변수 `PROJECT_ID`, `REGION`, `SERVICE`, `REPOSITORY`로 넘겨요. 스크립트가 이 넷을 `-var`로 넘겨서 `terraform.tfvars`에 적어도 소용없어요. CPU, 메모리, 인스턴스 수, 보관 일수도 `.env`에 `CPU`, `MEMORY`, `MIN_INSTANCES`, `MAX_INSTANCES`, `RETENTION_DAYS`로 적어 둘 수 있고, `TF_VAR_*` 환경 변수나 `terraform/terraform.tfvars`로 바꿔도 돼요. OAuth 값은 `terraform.tfvars`에 넣지 마세요. Terraform에서는 `terraform.tfvars`가 `TF_VAR_*`보다 앞서서 `.env`에서 넘긴 값을 덮어써요. Terraform 상태는 `terraform/terraform.tfstate`에 로컬로 두고 git에 넣지 않아요.
 
 | 파일 | 만드는 것 |
 | --- | --- |

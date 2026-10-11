@@ -1,19 +1,16 @@
 variable "project_id" {
   description = "Google Cloud project that hosts Cloud Run, Vertex AI and the media bucket."
   type        = string
-  default     = "ytcreator-508301"
 }
 
 variable "region" {
   description = "Region for Cloud Run, Artifact Registry and the media bucket."
   type        = string
-  default     = "asia-northeast3"
 }
 
 variable "service_name" {
   description = "Cloud Run service name. Also prefixes the runtime service account and the media bucket."
   type        = string
-  default     = "ytcreator"
 }
 
 variable "image_uri" {
@@ -24,13 +21,11 @@ variable "image_uri" {
 variable "oauth_client_id" {
   description = "Google OAuth 2.0 Web Client ID for creator sign-in and YouTube Data/Analytics API access (GOOGLE_OAUTH_CLIENT_ID)."
   type        = string
-  default     = ""
 }
 
 variable "oauth_client_secret" {
   description = "Google OAuth 2.0 Web Client Secret (GOOGLE_OAUTH_CLIENT_SECRET)."
   type        = string
-  default     = ""
   sensitive   = true
 }
 
@@ -67,5 +62,4 @@ variable "retention_days" {
 variable "repository_id" {
   description = "Artifact Registry repository (Docker format) that holds the service image."
   type        = string
-  default     = "ytcreator"
 }
