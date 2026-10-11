@@ -36,6 +36,9 @@ EDIT_TOOLS = frozenset(
 # Changes under these paths can leave README.md out of date.
 README_INPUTS = ('README.md', '.env.example', 'src/core/config.py',
                  'src/api/', 'frontend/src/')
+# terminationReason of an ordinary end of turn: Jetski sends NO_TOOL_CALL,
+# its docs show model_stop. Errors, step limits and cancels let the agent go.
+NORMAL_STOPS = frozenset({'no_tool_call', 'model_stop'})
 _HUNK = re.compile(r'^@@ -\S+ \+(\d+)(?:,(\d+))? @@', re.M)
 
 
@@ -184,7 +187,8 @@ def _state_path(conversation: str) -> pathlib.Path:
 
 def hook(payload: dict[str, Any]) -> dict[str, str] | None:
   """Returns the Stop hook decision, or None to let the agent stop."""
-  if payload.get('terminationReason', 'model_stop') != 'model_stop':
+  reason = str(payload.get('terminationReason') or '').lower()
+  if payload.get('error') or reason not in NORMAL_STOPS:
     return None
   if payload.get('fullyIdle') is False:
     return None  # Background work will wake the agent up again.
