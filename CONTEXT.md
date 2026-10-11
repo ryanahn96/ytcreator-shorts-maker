@@ -7,7 +7,7 @@
 화면에서는 _화면 표기_ 가 있는 용어를 그 말로 부른다.
 
 **Source Video**:
-사용자가 올린 원본 롱폼 영상 파일. 분석과 렌더링에 같은 파일을 쓴다. 이미 내 YouTube 채널에 올라가 있는 롱폼 영상(`#shorts`가 없는 영상)이라면 영상 길이와 최신 업로드 날짜를 기준으로 매칭하거나 직접 골라 YouTube Video Context를 연결할 수 있다.
+사용자가 올린 원본 롱폼 영상 파일. 분석과 렌더링에 같은 파일을 쓴다. 이미 내 YouTube 채널에 올라가 있는 롱폼 영상(`#shorts`가 없는 영상)이라면 사용자가 내 채널 영상 목록에서 그 영상을 직접 고르거나 영상 URL·ID를 넣어 YouTube Video Context를 연결할 수 있다.
 _Avoid_: preset video, sample clip, raw media
 
 **YouTube Video Context**:

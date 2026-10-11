@@ -1,12 +1,12 @@
 /**
- * The first screen: drop or pick the Source Video file, optionally link the
- * matching long-form video from the signed-in creator's YouTube channel (to
- * pull its Audience Retention peaks/lows, viewer comments, and official
+ * The first screen: drop or pick the Source Video file, optionally pick the
+ * same long-form video from the signed-in creator's YouTube channel by hand
+ * (to pull its Audience Retention peaks/lows, viewer comments, and official
  * captions), optionally tune the Editorial Prompt with those data insights,
  * then start the analysis with "Shorts 만들기".
  */
 
-import {useEffect, useRef, useState, type DragEvent, type ReactNode} from 'react';
+import {useEffect, useState, type DragEvent, type ReactNode} from 'react';
 
 import type {UploadState} from '../hooks/useSourceUpload';
 import {
@@ -36,7 +36,9 @@ const VIDEO_ACCEPT = 'video/*';
 // The suffixes the server stores (src/infra/storage.py); some browsers
 // leave file.type empty for .mkv.
 const VIDEO_SUFFIXES = ['.mp4', '.mov', '.m4v', '.mkv', '.webm'];
-const DURATION_MATCH_TOLERANCE_SEC = 2.0;
+// A linked video whose length differs from the file by more than this gets
+// a warning.
+const DURATION_TOLERANCE_SEC = 2.0;
 const TUNED_SECTION_HEADER = '[YouTube 데이터 기반 맞춤 지시]';
 
 function isVideoFile(file: File): boolean {
@@ -98,19 +100,6 @@ function formatPrivacyLabel(privacy: string | undefined): string {
     default:
       return privacy || '공개';
   }
-}
-
-function isDurationMatched(
-  videoDurationSec: number,
-  localDurationSec: number,
-): boolean {
-  if (videoDurationSec <= 0 || localDurationSec <= 0) {
-    return false;
-  }
-  return (
-    Math.abs(videoDurationSec - localDurationSec) <=
-    DURATION_MATCH_TOLERANCE_SEC
-  );
 }
 
 /** Injects or updates the data-driven editorial instruction block in prompt. */
@@ -255,7 +244,6 @@ function YouTubeChannelLinkSection(props: {
   const [context, setContext] = useState<YouTubeVideoContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
-  const autoMatchedDurationRef = useRef<number>(0);
 
   const loadList = () => {
     setLoadingList(true);
@@ -285,27 +273,6 @@ function YouTubeChannelLinkSection(props: {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUploadedFile]);
-
-  // Videos are already sorted by newest publishedAt first.
-  const newestMatchedVideoId =
-    durationSec > 0
-      ? (videos?.find((v) => isDurationMatched(v.durationSec, durationSec))
-          ?.videoId ?? '')
-      : '';
-
-  // Auto-select the newest upload whose duration matches the uploaded file.
-  useEffect(() => {
-    if (
-      !newestMatchedVideoId ||
-      autoMatchedDurationRef.current === durationSec
-    ) {
-      return;
-    }
-    autoMatchedDurationRef.current = durationSec;
-    if (!videoId.trim()) {
-      onChange(newestMatchedVideoId);
-    }
-  }, [durationSec, newestMatchedVideoId, videoId, onChange]);
 
   useEffect(() => {
     setManualInput(videoId);
@@ -340,10 +307,7 @@ function YouTubeChannelLinkSection(props: {
     videos?.find((item) => item.videoId === videoId) ?? null;
   const linkedDurationSec =
     context?.durationSec || selectedItem?.durationSec || 0;
-  const linkedDurationMatches = isDurationMatched(
-    linkedDurationSec,
-    durationSec,
-  );
+  const lengthGapSec = Math.abs(linkedDurationSec - durationSec);
 
   return (
     <details
@@ -374,9 +338,9 @@ function YouTubeChannelLinkSection(props: {
         )}
       </summary>
       <div className="space-y-4 px-6 pb-6">
-        {durationSec > 0 && linkedDurationSec > 0 && !linkedDurationMatches && (
+        {durationSec > 0 && linkedDurationSec > 0 && lengthGapSec > DURATION_TOLERANCE_SEC && (
           <Notice tone="warning">
-            {`업로드한 파일(${formatClock(durationSec)})과 연결된 YouTube 영상(${formatClock(linkedDurationSec)})의 길이가 다릅니다 (차이 ${Math.abs(linkedDurationSec - durationSec).toFixed(1)}초).`}
+            {`업로드한 파일(${formatClock(durationSec)})과 연결된 YouTube 영상(${formatClock(linkedDurationSec)})의 길이가 다릅니다 (차이 ${lengthGapSec.toFixed(1)}초).`}
           </Notice>
         )}
 
@@ -603,11 +567,6 @@ function YouTubeChannelLinkSection(props: {
               <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1">
                 {videos.map((item) => {
                   const selected = item.videoId === videoId;
-                  const durationMatched = isDurationMatched(
-                    item.durationSec,
-                    durationSec,
-                  );
-                  const isNewestMatch = item.videoId === newestMatchedVideoId;
                   return (
                     <div
                       key={item.videoId}
@@ -623,9 +582,7 @@ function YouTubeChannelLinkSection(props: {
                       className={`flex cursor-pointer flex-col gap-3 rounded-2xl p-3.5 text-left transition-colors sm:flex-row sm:items-start ${STATE_LAYER} ${
                         selected
                           ? 'bg-secondary-container/80 text-on-secondary-container ring-2 ring-primary'
-                          : durationMatched
-                            ? 'bg-primary-container/20 text-on-surface ring-1 ring-primary/60'
-                            : 'bg-surface text-on-surface'
+                          : 'bg-surface text-on-surface'
                       }`}
                     >
                       <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-xl bg-surface-container-highest sm:h-28 sm:w-48">
@@ -650,13 +607,6 @@ function YouTubeChannelLinkSection(props: {
 
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {durationMatched && (
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full ${isNewestMatch ? 'bg-primary' : 'bg-primary/85'} px-2.5 py-0.5 text-[11px] font-semibold text-on-primary`}
-                            >
-                              {isNewestMatch ? '자동 매칭' : '길이 일치'}
-                            </span>
-                          )}
                           <span className="rounded-full bg-surface-container-highest px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
                             {formatPrivacyLabel(item.privacyStatus)}
                           </span>
