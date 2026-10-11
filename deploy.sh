@@ -29,34 +29,47 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Read settings from .env if present and not already provided in environment
-if [[ -f .env ]]; then
-  if [[ -z "${PROJECT_ID:-}" ]]; then
-    ENV_PROJECT="$(grep -E '^(GOOGLE_CLOUD_PROJECT|PROJECT_ID)=' .env | head -n 1 | cut -d'=' -f2- | tr -d '\r\n'\''"' || true)"
-    if [[ -n "${ENV_PROJECT}" ]]; then
-      PROJECT_ID="${ENV_PROJECT}"
-    fi
+# Read a single KEY from .env (stripping comments and quotes)
+read_env() {
+  local key="$1"
+  if [[ -f .env ]]; then
+    grep -E "^${key}=" .env 2>/dev/null | tail -n 1 | cut -d'=' -f2- | tr -d '\r\n'\''"' || true
   fi
-  if [[ -z "${TF_VAR_oauth_client_id:-}" && -z "${GOOGLE_OAUTH_CLIENT_ID:-}" ]]; then
-    GOOGLE_OAUTH_CLIENT_ID="$(grep -E '^GOOGLE_OAUTH_CLIENT_ID=' .env | cut -d'=' -f2- | tr -d '\r\n'\''"' || true)"
-    if [[ -n "${GOOGLE_OAUTH_CLIENT_ID}" ]]; then
-      export GOOGLE_OAUTH_CLIENT_ID
-    fi
-  fi
-  if [[ -z "${TF_VAR_oauth_client_secret:-}" && -z "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]]; then
-    GOOGLE_OAUTH_CLIENT_SECRET="$(grep -E '^GOOGLE_OAUTH_CLIENT_SECRET=' .env | cut -d'=' -f2- | tr -d '\r\n'\''"' || true)"
-    if [[ -n "${GOOGLE_OAUTH_CLIENT_SECRET}" ]]; then
-      export GOOGLE_OAUTH_CLIENT_SECRET
-    fi
+}
+
+# Read deployment settings from environment or .env (no hardcoded defaults)
+if [[ -z "${PROJECT_ID:-}" ]]; then
+  PROJECT_ID="$(read_env PROJECT_ID)"
+  if [[ -z "${PROJECT_ID}" ]]; then
+    PROJECT_ID="$(read_env GOOGLE_CLOUD_PROJECT)"
   fi
 fi
 
-PROJECT_ID="${PROJECT_ID:-ytcreator-508301}"
-REGION="${REGION:-asia-northeast3}"
-SERVICE="${SERVICE:-ytcreator}"
-REPOSITORY="${REPOSITORY:-ytcreator}"
-IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
-TF_DIR="${TF_DIR:-terraform}"
+if [[ -z "${REGION:-}" ]]; then
+  REGION="$(read_env REGION)"
+fi
+
+if [[ -z "${SERVICE:-}" ]]; then
+  SERVICE="$(read_env SERVICE)"
+  if [[ -z "${SERVICE}" ]]; then
+    SERVICE="$(read_env SERVICE_NAME)"
+  fi
+fi
+
+if [[ -z "${REPOSITORY:-}" ]]; then
+  REPOSITORY="$(read_env REPOSITORY)"
+  if [[ -z "${REPOSITORY}" ]]; then
+    REPOSITORY="$(read_env REPOSITORY_ID)"
+  fi
+fi
+
+if [[ -z "${GOOGLE_OAUTH_CLIENT_ID:-}" && -z "${TF_VAR_oauth_client_id:-}" ]]; then
+  GOOGLE_OAUTH_CLIENT_ID="$(read_env GOOGLE_OAUTH_CLIENT_ID)"
+fi
+
+if [[ -z "${GOOGLE_OAUTH_CLIENT_SECRET:-}" && -z "${TF_VAR_oauth_client_secret:-}" ]]; then
+  GOOGLE_OAUTH_CLIENT_SECRET="$(read_env GOOGLE_OAUTH_CLIENT_SECRET)"
+fi
 
 if [[ -z "${TF_VAR_oauth_client_id:-}" && -n "${GOOGLE_OAUTH_CLIENT_ID:-}" ]]; then
   export TF_VAR_oauth_client_id="${GOOGLE_OAUTH_CLIENT_ID}"
@@ -64,6 +77,51 @@ fi
 if [[ -z "${TF_VAR_oauth_client_secret:-}" && -n "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]]; then
   export TF_VAR_oauth_client_secret="${GOOGLE_OAUTH_CLIENT_SECRET}"
 fi
+
+# Optional infrastructure sizing from environment or .env
+if [[ -z "${TF_VAR_cpu:-}" ]]; then
+  ENV_CPU="$(read_env CPU)"
+  [[ -n "${ENV_CPU}" ]] && export TF_VAR_cpu="${ENV_CPU}"
+fi
+if [[ -z "${TF_VAR_memory:-}" ]]; then
+  ENV_MEMORY="$(read_env MEMORY)"
+  [[ -n "${ENV_MEMORY}" ]] && export TF_VAR_memory="${ENV_MEMORY}"
+fi
+if [[ -z "${TF_VAR_min_instances:-}" ]]; then
+  ENV_MIN="$(read_env MIN_INSTANCES)"
+  [[ -n "${ENV_MIN}" ]] && export TF_VAR_min_instances="${ENV_MIN}"
+fi
+if [[ -z "${TF_VAR_max_instances:-}" ]]; then
+  ENV_MAX="$(read_env MAX_INSTANCES)"
+  [[ -n "${ENV_MAX}" ]] && export TF_VAR_max_instances="${ENV_MAX}"
+fi
+if [[ -z "${TF_VAR_retention_days:-}" ]]; then
+  ENV_RETENTION="$(read_env RETENTION_DAYS)"
+  [[ -n "${ENV_RETENTION}" ]] && export TF_VAR_retention_days="${ENV_RETENTION}"
+fi
+
+# Validate required deployment variables (all must be set in .env or environment)
+MISSING_VARS=()
+[[ -z "${PROJECT_ID:-}" ]] && MISSING_VARS+=("PROJECT_ID (또는 GOOGLE_CLOUD_PROJECT)")
+[[ -z "${REGION:-}" ]] && MISSING_VARS+=("REGION")
+[[ -z "${SERVICE:-}" ]] && MISSING_VARS+=("SERVICE")
+[[ -z "${REPOSITORY:-}" ]] && MISSING_VARS+=("REPOSITORY")
+[[ -z "${TF_VAR_oauth_client_id:-}" ]] && MISSING_VARS+=("GOOGLE_OAUTH_CLIENT_ID")
+[[ -z "${TF_VAR_oauth_client_secret:-}" ]] && MISSING_VARS+=("GOOGLE_OAUTH_CLIENT_SECRET")
+
+if (( ${#MISSING_VARS[@]} > 0 )); then
+  echo "오류: 배포에 필요한 변수가 .env 또는 환경 변수에 설정되지 않았습니다:" >&2
+  for var in "${MISSING_VARS[@]}"; do
+    echo "  - ${var}" >&2
+  done
+  echo ".env 파일에 해당 값을 설정한 뒤 다시 실행하세요." >&2
+  exit 1
+fi
+
+IMAGE_TAG="${IMAGE_TAG:-$(read_env IMAGE_TAG)}"
+IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
+TF_DIR="${TF_DIR:-$(read_env TF_DIR)}"
+TF_DIR="${TF_DIR:-terraform}"
 
 IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}"
 IMAGE="${IMAGE_PATH}:${IMAGE_TAG}"
