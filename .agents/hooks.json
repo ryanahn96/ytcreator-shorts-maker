@@ -1,0 +1,25 @@
+{
+  "ytcreator-check": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 -B scripts/check.py --hook",
+        "timeout": 120
+      }
+    ]
+  },
+  "ytcreator-git-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B scripts/git_guard.py || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
