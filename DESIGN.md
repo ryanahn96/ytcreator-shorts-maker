@@ -1,119 +1,84 @@
 ---
 name: Tonal Creator Studio
 colors:
-  surface: '#f6faff'
-  surface-dim: '#d6dadf'
-  surface-bright: '#f6faff'
-  surface-container-lowest: '#ffffff'
-  surface-container-low: '#f0f4f9'
-  surface-container: '#eaeef3'
-  surface-container-high: '#e4e9ed'
-  surface-container-highest: '#dfe3e8'
-  on-surface: '#171c20'
-  on-surface-variant: '#424654'
-  inverse-surface: '#2c3135'
-  inverse-on-surface: '#edf1f6'
-  outline: '#737785'
-  outline-variant: '#c3c6d6'
-  surface-tint: '#0856cf'
-  primary: '#0041a2'
+  surface: '#ffffff'
+  surface-container-low: '#f8fafd'
+  surface-container: '#f0f4f9'
+  surface-container-high: '#e9eef6'
+  surface-container-highest: '#dde3ea'
+  on-surface: '#1f1f1f'
+  on-surface-variant: '#444746'
+  outline: '#747775'
+  outline-variant: '#c4c7c5'
+  primary: '#0b57d0'
   on-primary: '#ffffff'
-  primary-container: '#0b57d0'
-  on-primary-container: '#ced9ff'
-  inverse-primary: '#b2c5ff'
-  secondary: '#3f6377'
-  on-secondary: '#ffffff'
-  secondary-container: '#c0e5fd'
-  on-secondary-container: '#43677b'
-  tertiary: '#94001b'
-  on-tertiary: '#ffffff'
-  tertiary-container: '#c10027'
-  on-tertiary-container: '#ffcecc'
-  error: '#ba1a1a'
-  on-error: '#ffffff'
-  error-container: '#ffdad6'
-  on-error-container: '#93000a'
-  primary-fixed: '#dae2ff'
-  primary-fixed-dim: '#b2c5ff'
-  on-primary-fixed: '#001847'
-  on-primary-fixed-variant: '#0040a1'
-  secondary-fixed: '#c3e7ff'
-  secondary-fixed-dim: '#a7cbe3'
-  on-secondary-fixed: '#001e2c'
-  on-secondary-fixed-variant: '#264b5e'
-  tertiary-fixed: '#ffdad8'
-  tertiary-fixed-dim: '#ffb3b0'
-  on-tertiary-fixed: '#410006'
-  on-tertiary-fixed-variant: '#92001b'
-  background: '#f6faff'
-  on-background: '#171c20'
-  surface-variant: '#dfe3e8'
+  primary-container: '#d3e3fd'
+  on-primary-container: '#041e49'
+  secondary-container: '#c2e7ff'
+  on-secondary-container: '#001d35'
+  error: '#b3261e'
+  error-container: '#f9dedc'
+  on-error-container: '#410e0b'
+  warning: '#b06000'
+  inverse-surface: '#303030'
+  inverse-on-surface: '#f2f2f2'
+  action: '#ec0032'
 typography:
   headline-lg:
-    fontFamily: Plus Jakarta Sans
-    fontSize: 32px
-    fontWeight: '600'
-    lineHeight: 40px
-  headline-lg-mobile:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Google Sans Flex
     fontSize: 24px
-    fontWeight: '600'
+    fontWeight: '400'
     lineHeight: 32px
-  headline-md:
-    fontFamily: Plus Jakarta Sans
-    fontSize: 22px
-    fontWeight: '500'
-    lineHeight: 28px
   title-lg:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Google Sans Flex
     fontSize: 18px
     fontWeight: '500'
-    lineHeight: 24px
-    letterSpacing: -0.015em
+    lineHeight: 28px
+    letterSpacing: -0.025em
   title-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Google Sans Flex
     fontSize: 16px
     fontWeight: '500'
     lineHeight: 24px
   body-base:
-    fontFamily: Noto Sans
+    fontFamily: Google Sans Flex
     fontSize: 14px
     fontWeight: '400'
     lineHeight: 20px
   body-medium:
-    fontFamily: Noto Sans
+    fontFamily: Google Sans Flex
     fontSize: 14px
     fontWeight: '500'
     lineHeight: 20px
-    letterSpacing: 0.01em
   label-md:
-    fontFamily: Noto Sans
+    fontFamily: Google Sans Flex
     fontSize: 13px
     fontWeight: '500'
-    lineHeight: 18px
-    letterSpacing: 0.01em
+    lineHeight: 20px
   label-sm:
-    fontFamily: Noto Sans
+    fontFamily: Google Sans Flex
     fontSize: 12px
-    fontWeight: '500'
+    fontWeight: '400'
     lineHeight: 16px
   caption:
-    fontFamily: Noto Sans
+    fontFamily: Google Sans Flex
     fontSize: 11px
     fontWeight: '500'
-    lineHeight: 14px
+    lineHeight: 16px
 rounded:
-  sm: 0.5rem
-  DEFAULT: 1rem
-  md: 1.5rem
-  lg: 2rem
-  xl: 3rem
+  DEFAULT: 0.25rem
+  lg: 0.5rem
+  xl: 0.75rem
+  2xl: 1rem
+  card: 28px
   full: 9999px
 spacing:
   gutter: 1rem
-  gutter-desktop: 1.5rem
   margin: 1rem
-  margin-desktop: 1.5rem
+  margin-sm: 1.5rem
+  header-height: 4rem
+  card-padding: 1rem
+  dialog-padding: 1.5rem
   space-xs: 0.25rem
   space-sm: 0.5rem
   space-md: 1rem
@@ -123,110 +88,162 @@ spacing:
 
 ## Brand & Style
 
-This design system blends Google Material 3's intelligent editorial container system with high-velocity creative workbench utilities tailored for short-form video synthesis. The product balances calm, fatigue-reducing tonal workspaces during long creative sessions with energetic, high-contrast focal points that reflect creator momentum.
+The studio follows Google Material 3 the way the Gemini web app uses it, with one YouTube red for the export action. Work areas are calm tonal surfaces, and color goes to what the creator acts on: blue for interaction, the brand gradient for a screen's main call to action, red for export. Stepped surface colors and hairline dividers separate areas. Shadows appear only on things that float.
 
-### Brand Personality
-- **Intelligent & Fluid:** Multimodal AI assistance integrated seamlessly with precision controls.
-- **Calm & Tonal:** Surface-first separation eliminates heavy shadows and harsh bounding borders.
-- **Dynamic & Creator-Centric:** Electric blue interactions anchored with focused broadcast accents.
+There are two themes. The app follows the device by default, and the header theme menu (시스템, 라이트, 다크) saves a choice in `localStorage`. `index.html` sets `data-theme` on `<html>` before the first paint, and `frontend/src/index.css` holds one token set per theme.
 
-### Style Attributes
-- **Design Archetype:** Corporate / Modern mixed with Google Material 3 and Gemini tonal architecture.
-- **Physical Feel:** Tactile pill silhouettes, large rounded containers, and gentle surface stepping.
-- **Visual Contrast:** High internal canvas discipline (pure black 9:16 stages with neon subtitle highlights) encased inside clean, low-contrast, light tonal workbench envelopes.
+The 9:16 Shorts canvas is a separate world. Its colors and fonts come from each Look (see CONTEXT.md), not from these tokens.
 
 ## Colors
 
-The color system is organized around tonal surface hierarchy rather than dimensional elevation. Pure white anchors primary panels, while stepped neutral tints delineate toolbars, cards, and inspectors.
+The frontmatter lists the light theme. Each token is a CSS variable in `frontend/src/index.css` (`--surface` and so on), and `@theme inline` turns it into a Tailwind color. Components write classes such as `bg-surface-container` or `text-on-surface-variant` instead of hex values, so switching the theme changes no component.
 
-### Palette Architecture
-- **Primary (`#0B57D0`):** Electric Blue for active states, key interactive indicators, tab selection markers, and input focus rings.
-- **Secondary (`#C2E7FF`):** Tonal Ice Blue serving as high-comfort, low-strain container fills for active chips, segmented toggle selections, and subtle highlights.
-- **Tertiary / Action Accent (`#EC0032`):** Broadcast Red reserved strictly for definitive creator publishing milestones, final video export triggers, and irreversible deletion flows.
-- **Neutral Surface Foundations:**
-  - `surface` (`#FFFFFF`): Base workspace viewport.
-  - `surface-container-low` (`#F8FAFD`): Soft canvas framing.
-  - `surface-container` (`#F0F4F9`): Main functional card surfaces.
-  - `surface-container-high` (`#E9EEF6`): Segmented track backgrounds and elevated dialogues.
-  - `surface-container-highest` (`#DDE3EA`): Inactive switch tracks, dividers, and slider grooves.
-- **Text & Borders:**
-  - `on-surface` (`#1F1F1F`): Primary copy, active numbers, and major section labels.
-  - `on-surface-variant` (`#444746`): Secondary copy, hints, and timecode readouts.
-  - `outline-variant` (`#C4C7C5`): Hairline structural separators.
+| Token | Light | Dark | Used for |
+| --- | --- | --- | --- |
+| `surface` | `#ffffff` | `#131314` | page, header, text field fill |
+| `surface-container-low` | `#f8fafd` | `#1b1b1b` | quiet inset panels |
+| `surface-container` | `#f0f4f9` | `#1e1f20` | cards, unselected Scenario chips |
+| `surface-container-high` | `#e9eef6` | `#282a2c` | dialogs, segmented tracks, the 말로 편집 widget, warning notices |
+| `surface-container-highest` | `#dde3ea` | `#333537` | switch track when off, progress track, placeholders |
+| `on-surface` | `#1f1f1f` | `#e3e3e3` | main text |
+| `on-surface-variant` | `#444746` | `#c4c7c5` | secondary text, labels, standard icon buttons |
+| `outline` | `#747775` | `#8e918f` | outlined buttons, switch when off, hovered fields |
+| `outline-variant` | `#c4c7c5` | `#444746` | field borders, dividers at 70%, scrollbars |
+| `primary` | `#0b57d0` | `#a8c7fa` | filled and text buttons, selected tab, focus ring, sliders |
+| `on-primary` | `#ffffff` | `#062e6f` | content on `primary` |
+| `primary-container` | `#d3e3fd` | `#0842a0` | highlights, often translucent, such as the playing transcript line |
+| `on-primary-container` | `#041e49` | `#d3e3fd` | content on `primary-container` |
+| `secondary-container` | `#c2e7ff` | `#004a77` | tonal buttons, the selected segment and Scenario chip |
+| `on-secondary-container` | `#001d35` | `#c2e7ff` | content on `secondary-container` |
+| `error` | `#b3261e` | `#f2b8b5` | error text and icons |
+| `error-container` | `#f9dedc` | `#8c1d18` | error notices |
+| `on-error-container` | `#410e0b` | `#f9dedc` | content on `error-container` |
+| `warning` | `#b06000` | `#fdd663` | the warning notice icon |
+| `inverse-surface` | `#303030` | `#e3e3e3` | snackbar |
+| `inverse-on-surface` | `#f2f2f2` | `#303030` | snackbar text |
+| `action` | `#ec0032` | `#ec0032` | the 내보내기 button in the editor header |
 
-### Video Overlay Contrast Tokens
-The video stage adheres to dedicated broadcast canvas defaults: `#000000` base frame, `#3DDC4A` viral hook accents, `#F2E35A` high-luminance subtitles, and `#FFFFFF` 2px stroke boundaries.
+Interaction states are shared:
+
+- State layer: `currentColor` at 8% on hover, 10% on keyboard focus and 12% while pressed (`STATE_LAYER` in `ui.tsx`).
+- Disabled: `on-surface` at 12% for fills and 38% for content.
+- Focus: a 2px `primary` outline with a 2px offset.
+- Text selection: `primary` mixed at 28%.
+
+### Brand gradient
+
+`brand-gradient` in `index.css` runs left to right through `#ec0032`, `#e01378` at 33%, `#9334e6` at 66% and `#0b57d0`. It is the only gradient. It fills a screen's main call to action ("Google / YouTube 계정으로 로그인", "Shorts 만들기") and the progress bar shown while 다시 분석 runs, and the analysis orb turns the same colors into a conic ring.
+
+### Shorts canvas defaults
+
+These are not UI tokens. They are the starting Look Style of a new Look (`default_look_style()` in `src/core/config.py`), and the user can change every one: canvas `#000000`; Headline first line `#3DDC4A` and the other lines `#FFFFFF`, size 84, black outline 2; captions `#F2E35A`, size 44, black outline 3; video-box border off, `#FFFFFF` and 6 wide when turned on; Headline and captions in the bundled Noto Sans KR. Sizes and widths are in 1080×1920 canvas units.
 
 ## Typography
 
-The typographic hierarchy combines **Plus Jakarta Sans** for friendly, geometric UI titles and numeric display with **Noto Sans** for robust, highly legible body data, editing forms, and internationalized scripts.
+One family covers the UI: Google Sans Flex, with Noto Sans KR for Hangul (`--font-sans: 'Google Sans Flex', 'Noto Sans KR', ui-sans-serif, system-ui, sans-serif`). `frontend/index.html` loads both from Google Fonts, Google Sans Flex as a variable font (opsz 6-144, wght 1-1000) and Noto Sans KR at weights 400-700. Body text is 14px on a 20px line. Sizes are Tailwind's `text-2xl`, `text-lg`, `text-base`, `text-sm` and `text-xs`, plus `text-[13px]` and `text-[11px]`.
 
-### Role Conventions
-- **Plus Jakarta Sans (`headline-lg`, `title-lg`, `title-md`):** Used on workbench headers, modal crowns, and primary workflow titles. Its rounded curvature mirrors the system's pillular interface shells.
-- **Noto Sans (`body-base`, `body-medium`, `label-md`):** Used throughout operational forms, transcript timelines, parameter readouts, and tooltips.
-- **Tabular Figures:** All numeric readouts (timecodes, dimensions, duration scrubbers, audio decibels) must activate `font-variant-numeric: tabular-nums` to eliminate layout shift during playback.
+| Role | Size and weight | Where |
+| --- | --- | --- |
+| `headline-lg` | 24/32, regular | dialog titles, the analysis status line; the login title uses medium weight and tight tracking |
+| `title-lg` | 18/28, medium, tight tracking | the app name in the header |
+| `title-md` | 16/24, medium | card titles, large buttons |
+| `body-base` | 14/20, regular | default text, dialog content, notices, fields |
+| `body-medium` | 14/20, medium | section titles, tool tabs, medium buttons |
+| `label-md` | 13px, medium | small buttons, segmented options |
+| `label-sm` | 12/16 | the most common size, for metadata, hints and secondary labels |
+| `caption` | 11px, medium | badges and counters |
+
+Buttons add 0.01em tracking. Numbers that change while editing or playing (times, sizes, field values) use `tabular-nums`; `TEXT_FIELD` and the slider readout already set it.
+
+Icons are Material Symbols Rounded at optical size 24. `Icon.tsx` downloads only the glyphs in `ICON_NAMES`, which must stay in alphabetical order, so a new icon goes into that list first. A selected tool tab shows its icon filled.
 
 ## Layout & Spacing
 
-The layout is grounded in a modular 4px baseline rhythm. Studio panels, floating dock tools, and parameter grids scale proportionally using explicit spacing tokens.
+Spacing follows Tailwind's 4px scale. Pages pad 1rem on the sides and 1.5rem from 640px. The header is sticky, 4rem tall, on `surface`. The editor caps its width at 1960px and the start screen at 56rem (`max-w-4xl`).
 
-### Layout Model
-- **Workbench Multi-Column Grid:** Desktop environments utilize an adaptive 3-column split:
-  1. *Clip Sequencing & Asset Pipeline:* `minmax(340px, 1fr)`
-  2. *Pinned 9:16 Video Preview Stage:* Fixed dynamic column scaled via viewport height: `min(420px, max(240px, calc((100dvh - 4rem - 16rem) * 9 / 16)))`
-  3. *Inspector & Synthesis Panel:* `minmax(380px, 1.15fr)`
-- **Responsive Adaptations:**
-  - *Compact (< 1024px):* Stacks into a unified vertical column with playback controls pinned atop or below active trimmers.
-  - *Tablet (1024px – 1279px):* Two-column split pinning the 9:16 player to the right column with sequential tabs in the primary column.
-  - *Desktop (≥ 1280px):* Full 3-column panoramic workbench with independent scroll layers per column.
+### Editor grid
+
+`.editor-grid` in `index.css` places the editor with a 1rem gap:
+
+- Below 1024px: one column, in the order clips, preview, tool tabs. The preview scrolls with the page.
+- 1024-1279px: clips and tool tabs share the left column. The preview takes the right column and stays pinned under the header.
+- From 1280px: three columns, clips at `minmax(340px, 1fr)`, the preview, tool tabs at `minmax(380px, 1.15fr)`.
+
+The preview column is `--preview-w` plus 2rem, with `--preview-w = min(420px, max(240px, (100dvh - 4rem - --preview-chrome) * 9 / 16))`. `--preview-chrome` covers the transport under the frame and the gaps. It is 10rem, or 17rem at 1024-1279px so the folded 말로 편집 widget fits under the pinned preview. A strip of Scenario chips above the grid scrolls sideways and fades at the edges that hide more chips.
 
 ## Elevation & Depth
 
-This system avoids dark, heavy drop shadows, instead using **Material 3 Tonal Stacking** paired with ultra-diffused atmospheric ambient occlusion.
+Depth comes from surface steps. Shadows mark only what floats.
 
-### Tonal Stratification
-- **Level 0 (Canvas Base):** `surface` (`#FFFFFF`).
-- **Level 1 (Structural Workbench Panels):** `surface-container` (`#F0F4F9`) with no drop shadow.
-- **Level 2 (Active Sub-Cards & Controls):** `surface-container-high` (`#E9EEF6`).
-- **Level 3 (Popovers, Flyout Drawers, Sticky Menus):** `surface-container-highest` (`#DDE3EA`) paired with an ambient drop shadow: `0px 4px 16px rgba(11, 87, 208, 0.04)`.
-- **Level 4 (Modal Dialogs):** Centered floating dialogs using `surface-container-high` backed by an overlay mask of `rgba(0, 0, 0, 0.45)` and ambient drop shadow `0px 24px 48px rgba(31, 31, 31, 0.12)`.
-- **Level 5 (Action Toasts / Floating Snackbars):** `inverse-surface` (`#303030`) rendered with crisp white text (`#F2F2F2`) and an ambient shadow `0px 8px 24px rgba(0, 0, 0, 0.16)`.
+- Page and header: `surface`.
+- Cards: `surface-container`, no shadow.
+- Controls inside cards: `surface-container-high` tracks (segmented control) and `surface` fields.
+- Floating: the theme menu (`surface`, `surface-container-high` in dark, `shadow-lg` and a 50% `outline-variant` ring), the 말로 편집 widget (`surface-container-high`, `outline-variant` border, `shadow-lg`) and the snackbar (`inverse-surface`, `shadow-lg`).
+- Modal: dialogs on `surface-container-high` with `shadow-2xl` over a `rgb(0 0 0 / 0.45)` backdrop.
+- Buttons lift on hover: `shadow-sm` for filled and tonal, `shadow-md` for the export button, `shadow-lg` for the gradient button.
 
 ## Shapes
 
-The system relies on a pillular geometric design language (`roundedness: 3`). Containers employ organic, pebble-like curvature that softens complex parameter layouts and offsets the rigid rectangular aspect of the 9:16 video viewport.
+Workbench shapes are rounded, and the scale in the frontmatter maps to Tailwind classes.
 
-### Geometry Guidelines
-- **Buttons, Badges, and Chips:** Fully capsule-shaped (`border-radius: 9999px`).
-- **Cards and Major Functional Panes:** Smooth sweeping curves (`border-radius: 28px` / `1.75rem`).
-- **Input Fields & Steppers:** Soft capsule-approximated geometries (`border-radius: 12px` to `16px`).
-- **Video Stage Exception:** The live 9:16 vertical render frame maintains a crisp internal boundary (`border-radius: 0px` to `8px`) inside its enclosing rounded pebble card.
+- `rounded-full`: buttons, icon buttons, chips, segmented controls and their options, switches, the folded 말로 편집 widget.
+- `rounded-[28px]`: cards, dialogs, the open 말로 편집 widget, the top of the tool tab row.
+- `rounded-2xl` (16px): notices, the theme menu, the preview frame, the 말로 편집 input box.
+- `rounded-xl` (12px): the snackbar, small inset panels and thumbnails.
+- `rounded-lg` (8px): text and number fields.
+- `rounded` (4px): tiny badges.
+
+The 9:16 preview frame is a 16px-rounded window onto the Shorts canvas. Inside the canvas the video box always has square corners (Short Template in CONTEXT.md).
 
 ## Components
 
+Shared pieces live in `frontend/src/components/ui.tsx`.
+
 ### Buttons
-- **Filled (Primary):** Solid `#0B57D0` fill with pure white label. Capsule silhouette (`rounded-full`), `px-5 py-2.5`, medium weight. Includes subtle state-layer tint (`currentColor` at 8% opacity on hover).
-- **Tonal (Secondary):** Surface `#C2E7FF` fill with `#001D35` text. Used for contextual tool triggers and secondary timeline functions.
-- **Outlined:** Transparent fill, `1px solid #747775` border, electric blue text.
-- **Action / Export:** Broadcast red `#EC0032` fill, white text, reserved exclusively for publishing and video generation handoffs.
-- **AI Synthesis Gradient Button:** Linear gradient (`#EC0032` → `#E01378` → `#9334E6` → `#0B57D0`), white text, reserved for one-click creative generation routines.
 
-### Chips & Segmented Controls
-- **Segmented Control:** Contained in a `surface-container-high` track (`rounded-full p-1`). The active option transitions using a smooth sliding `#C2E7FF` pill surface with high-contrast text.
-- **Filter Chips:** Capsule outline with `#C4C7C5` border. On selection, shifts to `#D3E3FD` background with electric blue check indicator.
+Every button is a pill with medium-weight text and a state layer. Sizes: `sm` is 32px tall with 13px text and 12px side padding, `md` 40px with 14px text and 20px padding, `lg` 56px with 16px text and 32px padding.
 
-### Input Fields & Steppers
-- **Text Inputs:** Height 36px to 40px, `rounded-xl` boundary with `1px solid #C4C7C5` border. On focus, transitions cleanly to a `2px solid #0B57D0` boundary without layout shift.
-- **Numeric Fields:** Right-aligned tabular numeric displays with appended visual units (`초`, `px`, `%`) embedded inside the trailing margin.
+- `filled`: `primary` fill, `on-primary` text.
+- `tonal`: `secondary-container` fill, `on-secondary-container` text.
+- `outlined`: 1px `outline` border, `primary` text.
+- `text`: `primary` text only.
+- `danger`: `action` red fill with white text, used only for 내보내기 in the editor header.
+- `gradient`: the brand gradient with white text, used large for a screen's main call to action.
 
-### Checkboxes & Toggle Switches
-- **Toggle Switches:** Track width 48px, height 28px (`rounded-full`). Unchecked: `#DDE3EA` with `#747775` thumb. Checked: `#0B57D0` track with `#FFFFFF` translated thumb.
-- **Checkboxes:** 18px rounded square (`rounded-sm`), transitioning to solid `#0B57D0` fill with white check glyph on active state.
+Icon buttons are 32px or 40px circles, `standard` with an `on-surface-variant` icon or `filled` on `primary`.
 
-### Cards & Dialogs
-- **Workbench Cards:** Layered using `surface-container` (`#F0F4F9`), padded with `1rem` to `1.5rem`, shaped at `28px` radius. Interior sections divide with hairline borders (`1px solid #C4C7C5` at 70% opacity).
-- **Export & Settings Dialogs:** Floating `surface-container-high` cards with `28px` curvature, 24px inner padding, and top-aligned headline typography.
+### Tabs and chips
 
-### Specialized Creator Tools
-- **Conversational Agent Input Bar:** Outlined pill bar positioned directly beneath the live preview stage, housing a continuous microphone trigger, inline prompt field, and blue circular execution control.
-- **9:16 Canvas Canvas Overlay:** Absolute-positioned bounding handles supporting direct click-and-drag re-positioning of yellow subtitles (`#F2E35A`) and lime-green hook titles (`#3DDC4A`).
+- Tool tabs (자막, 스타일, 소리, 반응·댓글): 56px tall, equal widths, 14px medium text with an icon. The selected tab turns `primary`, fills its icon and gets a 3px `primary` bar at the bottom.
+- Scenario chips: pills with 16px side padding. The selected chip is `secondary-container` with a small check in a `primary` circle; the others are `surface-container` and step up to `surface-container-high` on hover.
+- Segmented control: a `surface-container-high` pill track with 4px padding. Options are 32px pills with 13px medium text, and the selected one fills with `secondary-container`.
+
+### Fields and switches
+
+- Text field (`TEXT_FIELD`): 36px tall, `rounded-lg`, a 1px `outline-variant` border on `surface`, 14px tabular text. Hover darkens the border to `outline`. Focus turns it `primary` and adds a 1px `primary` ring, so nothing shifts.
+- Number field: a 96px right-aligned text field with its unit after it (초, px, %). It commits on blur or Enter.
+- Slider: a native range input tinted `primary`, with the label on the left and the value in tabular numbers on the right.
+- Color field: a round 32px swatch next to a hex text field.
+- Switch: a 48×28 track with a 2px border. Off, the track is `surface-container-highest` with an `outline` border and a 16px `outline` thumb. On, track and border are `primary` with a 20px `on-primary` thumb.
+
+There are no checkboxes in the studio.
+
+### Cards, dialogs and messages
+
+- Card: `surface-container`, `rounded-[28px]`, 16px padding, an optional 16px medium title.
+- Section: a titled group inside a card. Each section after the first starts with an `outline-variant` divider at 70%.
+- Dialog: a native `<dialog>` that traps focus and closes on Escape or a backdrop click. `surface-container-high`, `rounded-[28px]`, 24px padding, a 24px regular title and actions on the right.
+- Notice: an inline `rounded-2xl` message. Errors use `error-container`; warnings use `surface-container-high` with a `warning` icon.
+- Snackbar: bottom center, `inverse-surface`, `rounded-xl`, hides itself after 10 seconds.
+- Progress bar: a 4px `surface-container-highest` track with a `primary` or brand-gradient bar, indeterminate when it has no value.
+
+### Studio pieces
+
+- 말로 편집 widget (`EditAgentBar.tsx`): floats at the bottom right, 16px from the edges and 24px from 640px. Folded, it is a pill with the 말로 편집 button and the mic. Open, it is a card up to 26rem wide with the latest reply, the input and a 지난 대화 popover. It writes its height plus a gap to `--edit-agent-space`, and the tool tabs pad their bottom by that much.
+- Canvas overlay (`preview/OverlayLayer.tsx`): Headline lines, captions and Image Overlays can be dragged in the preview. Images get resize and rotate handles when selected, and the video box moves by its edges and resizes by its corners. A click on an item opens its control in the right panel.
+- Analysis orb: a 9rem ring in the brand colors with a blurred glow, turning while the analysis runs.
+- Full-screen preview: a black stage with the frame as large as the screen allows and the controls below. It sets `data-theme="dark"` on itself.
+
+### Motion
+
+New content rises in over 220ms with `cubic-bezier(0.2, 0, 0, 1)`, and dialogs open over 180ms. Under `prefers-reduced-motion: reduce` the orb, the indeterminate progress, the rise-in and the dialog animation stop.
