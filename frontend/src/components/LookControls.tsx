@@ -11,7 +11,7 @@ import {useEffect, useRef, useState, type Dispatch} from 'react';
 import type {AssetStore} from '../hooks/useAssets';
 import {errorMessage} from '../lib/api';
 import type {EditorAction} from '../lib/editor';
-import {anchorElement, revealElement, revealInput, type FocusRequest} from '../lib/focus';
+import {anchorElement, revealElement, type FocusRequest} from '../lib/focus';
 import {clampVideoBox, videoBox} from '../lib/framing';
 import {lookTarget, sameTextLayout} from '../lib/look';
 import type {
@@ -409,9 +409,12 @@ export function LookControls(props: {
       return;
     }
     if (wanted.kind === 'headline') {
-      revealInput(
-        root.querySelector<HTMLInputElement>(`[data-headline-line="${wanted.line}"]`),
+      const input = root.querySelector<HTMLInputElement>(
+        `[data-headline-line="${wanted.line}"]`,
       );
+      revealElement(input);
+      // preventScroll keeps the focus jump from cutting the smooth scroll short.
+      input?.focus({preventScroll: true});
     } else if (wanted.kind === 'captionStyle') {
       revealElement(anchorElement(root, 'caption-style'));
     } else if (wanted.kind === 'videoBox') {

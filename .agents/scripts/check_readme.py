@@ -40,10 +40,8 @@ def _read(path: str) -> str:
 
 def github_slug(heading: str) -> str:
   """Returns the anchor GitHub generates for a heading."""
-  text = heading.strip().lower().replace('`', '')
   # GitHub keeps letters of any script, digits, spaces, hyphens, underscores.
-  text = ''.join(ch for ch in text if ch.isalnum() or ch in ' -_')
-  return text.replace(' ', '-')
+  return re.sub(r'[^\w\- ]', '', heading.strip().lower()).replace(' ', '-')
 
 
 def _section(text: str, heading: str) -> str | None:
@@ -55,13 +53,6 @@ def _section(text: str, heading: str) -> str | None:
   rest = text[match.end():]
   end = re.search(rf'^#{{1,{level}}} ', rest, flags=re.M)
   return rest[:end.start()] if end else rest
-
-
-def _frontend_text() -> str:
-  return ''.join(
-      path.read_text(encoding='utf-8')
-      for path in sorted((ROOT / 'frontend/src').rglob('*'))
-      if path.suffix in ('.ts', '.tsx'))
 
 
 def _in_frontend_at_head(label: str) -> bool:
@@ -128,7 +119,10 @@ def review() -> tuple[list[str], list[str]]:
   _check_api_table(readme, problems)
 
   user_half = body.split('## 개발자 안내', 1)[0]
-  frontend = _frontend_text()
+  frontend = ''.join(
+      path.read_text(encoding='utf-8')
+      for path in sorted((ROOT / 'frontend/src').rglob('*'))
+      if path.suffix in ('.ts', '.tsx'))
   for label in sorted(set(re.findall(r'"([^"\n]{1,40})"', user_half))):
     if label in frontend:
       continue

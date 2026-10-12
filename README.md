@@ -5,7 +5,7 @@
 Shorts에 나오는 목소리와 화면은 모두 올린 원본에서 잘라 온 거예요. AI 목소리를 입히거나 원본에 없는 장면을 만들지 않아요. 앱 화면은 한국어예요.
 
 > [!TIP]
-> 실제 화면을 보면서 따라 하고 싶다면 [실습 가이드](docs/index.html)를 내려받아 브라우저로 여세요. 스크린숏과 함께 15단계를 안내하고, 단계마다 체크리스트가 있어요.
+> 실제 화면을 보면서 따라 하고 싶다면 [실습 가이드](docs/index.html)를 내려받아 브라우저로 여세요. 20분 안에 첫 Shorts를 만드는 핵심 순서를 안내해요. 15단계를 모두 다룬 [전체 가이드](docs/fullguide.html)도 있어요.
 
 이 문서는 두 부분이에요. [개발자 안내](#개발자-안내) 앞까지는 앱을 쓰는 사람을 위한 설명이고, 그 뒤는 서버를 직접 띄우거나 코드를 고치는 사람을 위한 내용이에요.
 
@@ -23,10 +23,10 @@ Shorts에 나오는 목소리와 화면은 모두 올린 원본에서 잘라 온
 - 후보마다 Gemini가 제목과 헤드라인을 써 줘요. 헤드라인은 Shorts가 끝날 때까지 화면 위쪽에 떠 있는 큰 글씨예요.
 - 말과 말 사이의 조용한 틈은 자동으로 빼요. 그래서 말이 끊기지 않고 이어져요.
 - 받아쓰기가 단어마다 말한 시각을 남겨서 자막이 목소리에 맞춰 나와요. 틀린 글자는 직접 고치면 돼요.
-- 내 채널에 이미 올린 같은 영상을 연결하면 YouTube 통계도 같이 써요. 시청자가 많이 본 구간은 넣고 적게 본 구간은 빼라고 Gemini에게 알려 주고, 실제 댓글도 참고하게 해요.
+- 내 채널에 이미 올린 같은 영상을 연결하면 YouTube 통계도 같이 써요. 시청자가 많이 본 구간을 먼저 고르라고 Gemini에게 알려 주고, 설명란 챕터 목차와 실제 댓글을 참고하게 해요. 맨 처음 Shorts를 만들 때는 YouTube Analytics에 내 채널 기존 Shorts 성과 데이터가 있으면 함께 보내고, 데이터가 없으면 보내지 않아요.
 - 구간, 순서, 자막 글자, 색, 글꼴, 이미지, 배경음악을 손으로 고칠 수 있어요.
 - "헤드라인을 노란색으로 크게"처럼 말하거나 적으면 그대로 고쳐 주는 말로 편집이 있어요.
-- 완성한 Shorts는 1080p, 1440p, 4K 중 하나로 MP4를 만들어요. 파일로 받거나 내 채널에 바로 올려요.
+- 완성한 Shorts는 1080p, 1440p, 4K 중 하나로 MP4를 만들어요. 파일로 받거나, 썸네일 설정과 골든타임 예약 발행, 원본 영상으로 이어 주는 첫 댓글 자동 등록까지 갖춰 내 채널에 바로 올려요.
 - 분석 한 번에 Gemini 비용이 대략 얼마 들었는지 화면 위에 보여 줘요.
 
 ## 어떻게 동작하나요
@@ -63,9 +63,9 @@ flowchart LR
 같은 영상이 내 채널에 이미 있다면 "내 채널 영상 연결"에서 이어 주세요. 연결하지 않아도 Shorts는 만들어져요.
 
 - 영상을 올리면 내 채널의 롱폼 영상 목록이 열려요. 올린 파일과 같은 영상을 직접 눌러 고르거나 "YouTube 영상 URL 또는 영상 ID 직접 입력" 칸에 주소를 넣으세요. 제목, 설명, 태그에 `#shorts`나 `#쇼츠`가 있는 영상은 목록에 나오지 않아요.
-- 연결하면 시청자 유지율 곡선, 조회수, 좋아요 수, 댓글 수, 공식 자막이 있는지가 보여요. 잘못 골랐다면 "연결 해제"를 누르세요.
-- 파일과 연결한 영상의 길이가 다르면 경고가 떠요.
-- "데이터로 프롬프트 튜닝"을 누르면 많이 본 구간, 적게 본 구간, 시청자 댓글을 Shorts 생성 프롬프트에 글로 넣어 줘요.
+- 연결하면 시청자 유지율 곡선, 조회수, 좋아요 수, 댓글 수, 공식 자막이 있는지가 보여요. 설명란에 챕터 타임스탬프가 있으면 "설명란 챕터 목차"도 함께 가져와요. 챕터가 없는 영상은 챕터 목차를 건너뛰어요. 잘못 골랐다면 "연결 해제"를 누르세요.
+- 영상을 연결한 뒤 "✨ 데이터로 프롬프트 튜닝"을 누르면 많이 본 피크 구간, 설명란 챕터, 시청자 댓글이 "Shorts 생성 프롬프트 바꾸기"에 맞춤 지시문으로 들어가고 "데이터 튜닝 적용됨" 표시가 떠요. 프롬프트를 열어 원하는 지시를 더하거나 고칠 수 있어요. 튜닝 버튼을 누르지 않아도 분석할 때 서버가 시청자 데이터를 자동으로 첨부하며, 프롬프트에 튜닝 지시문이 이미 있으면 중복으로 들어가지 않아요.
+- YouTube Analytics API에 내 채널의 인기 Shorts 조회수, 길이, 평균 시청 지속률, 구독자 증가 수 데이터가 있으면 맨 처음 분석에만 함께 보내고, 데이터가 없으면 보내지 않아요. 영상 분석이 끝난 뒤 편집 화면, 말로 편집, 다시 분석에서는 이 데이터를 사용하지 않아요.
 
 Shorts 생성 프롬프트는 어떤 구간을 골라 어떻게 엮을지 Gemini에게 알려 주는 지시문이에요. "Shorts 생성 프롬프트 바꾸기"를 펼치면 기본 문장을 보고 고칠 수 있고, "기본값으로"를 누르면 처음 문장으로 돌아가요.
 
@@ -97,7 +97,7 @@ Shorts 생성 프롬프트는 어떤 구간을 골라 어떻게 엮을지 Gemini
 - "주변 구간"과 "전체 영상"으로 막대가 보여 주는 시간 범위를 바꿔요.
 - 순서를 위아래로 바꾸고, 가운데 단어에서 둘로 나누고, 지울 수 있어요.
 - "원본 클립"으로 원본의 다른 구간을 더해요. "이미지 삽입"과 "영상 삽입"으로는 내 사진이나 다른 영상을 클립 사이에 끼워 넣어요. 넣은 이미지는 보여 줄 시간을, 넣은 영상은 쓸 구간과 소리 끄기를 정해요.
-- 내 채널 영상을 연결했다면 막대 위에 시청자 유지율 곡선이 겹치고, 클립에 "많이 본 구간"이나 "적게 본 구간" 표시가 붙어요.
+- 내 채널 영상을 연결했다면 막대 위에 시청자 유지율 곡선이 겹치고, 많이 본 구간과 겹치는 클립에 "많이 본 구간" 표시가 붙어요.
 - "Gemini 제안으로 되돌리기"를 누르면 이 Shorts를 Gemini가 처음 제안한 모습으로 되돌려요.
 
 #### 자막 고치기
@@ -127,7 +127,7 @@ Shorts 생성 프롬프트는 어떤 구간을 골라 어떻게 엮을지 Gemini
 
 #### 시청자 반응 보기
 
-내 채널 영상을 연결했다면 반응·댓글 탭에서 많이 본 구간, 적게 본 구간, 시청자 댓글을 볼 수 있어요.
+내 채널 영상을 연결했다면 반응·댓글 탭에서 "설명란 챕터 목차", "많이 본 구간", 시청자 댓글을 볼 수 있어요. 챕터 목차나 많이 본 구간, 시간 표시가 있는 댓글에서는 그 위치로 바로 이동하거나 "클립 추가", "+클립 추가"로 지금 Shorts에 끼워 넣을 수 있어요. 챕터가 없는 영상은 챕터 목차를 생략해요.
 
 #### 말로 편집
 
@@ -172,7 +172,10 @@ Gemini가 요청을 편집 동작으로 바꾸면 브라우저가 한꺼번에 �
 
 1. "화질 선택"에서 1080p, 1440p, 4K 중 하나를 고르세요. 처음에는 1440p가 골라져 있어요. 1080p보다 가운데 영상 박스가 커서 원본이 더 선명하게 남아요.
 2. "MP4 만들기"를 누르면 서버가 MP4를 만들어요. 다 되면 창 안에서 재생해 보고 "MP4 파일 다운로드"로 받아요. 파일 이름은 "원본파일이름-Shorts제목.mp4" 꼴이에요.
-3. 내 채널에 바로 올리려면 제목, 설명, 공개 상태를 정하고 "YouTube Shorts로 업로드"를 누르세요. 공개 상태는 비공개, 일부 공개, 공개 중에서 골라요. 설명 칸에는 `#Shorts`가 미리 들어 있어요.
+3. 내 채널에 바로 올리려면 제목, 설명, 썸네일, 공개 상태를 정하고 "YouTube Shorts로 업로드"를 누르세요. 공개 상태는 비공개, 일부 공개, 공개 중에서 골라요. 설명 칸에는 `#Shorts`가 미리 들어 있어요.
+   - "썸네일 설정"에서는 Gemini가 고른 훅 장면을 쓰는 "추천 프레임"과 "미리보기 확인", 슬라이더나 "현재 재생 위치 사용"으로 영상 프레임을 고르는 "직접 선택", 따로 만든 표지 파일을 "이미지 선택"이나 "다른 이미지"로 올리는 "이미지 업로드", 또는 "기본값" 중에서 골라요.
+   - "예약 발행"을 켜면 "골든타임 추천" 프리셋 버튼이나 날짜·시각 선택기로 공개 시각을 예약할 수 있어요. 예약 시각 전까지는 비공개로 올라가고 지정한 시각에 자동으로 공개돼요.
+   - "첫 댓글 자동 등록"을 켜면 업로드 직후 첫 댓글을 자동으로 달아 줘요. 연결한 내 채널 롱폼 영상이 있으면 원본 영상 링크와 첫 클립 시작 초 타임코드가 기본 문구로 미리 들어가요. 업로드가 끝나면 "커스텀 썸네일 등록됨", "첫 댓글 자동 등록됨" 표시와 함께 "YouTube Shorts 보기", "YouTube Studio에서 편집" 버튼이 나와요.
 
 ## 알아 두면 좋은 점
 
@@ -198,10 +201,10 @@ Gemini가 요청을 편집 동작으로 바꾸면 브라우저가 한꺼번에 �
 | 권한 | 범위 | 앱이 쓰는 곳 |
 | --- | --- | --- |
 | 기본 프로필과 이메일 | `openid`, `email`, `profile` | 머리글에 내 계정 표시 |
-| YouTube 계정 보기 | `youtube.readonly` | 내 채널 정보와 영상 목록 |
-| YouTube 계정 관리 | `youtube.force-ssl` | 공식 자막 내려받기. YouTube가 자막을 내려받을 때 이 권한을 요구해요. 앱 코드는 이 권한으로 읽기만 해요 |
-| YouTube Analytics 보기 | `yt-analytics.readonly` | 시청자 유지율 곡선 |
-| YouTube 동영상 업로드 | `youtube.upload` | 완성한 Shorts 올리기 |
+| YouTube 계정 보기 | `youtube.readonly` | 내 채널 정보, 영상 목록, 설명란 챕터 목차 읽기 |
+| YouTube 계정 관리 | `youtube.force-ssl` | 공식 자막 내려받기, 댓글 읽기, Shorts 업로드 직후 첫 댓글 자동 등록 |
+| YouTube Analytics 보기 | `yt-analytics.readonly` | 시청자 유지율 곡선과 내 채널 기존 Shorts 성과 조회 |
+| YouTube 동영상 업로드 | `youtube.upload` | 완성한 Shorts와 커스텀 썸네일 올리기, 예약 발행 설정 |
 
 ## 자주 묻는 질문
 
@@ -225,7 +228,7 @@ Shorts 생성 프롬프트를 모두 지워도 버튼이 잠겨요. 이때는 "�
 
 ### 연결한 영상과 길이가 다르다는 경고가 떠요
 
-올린 파일과 YouTube 영상이 서로 다른 영상이거나 한쪽이 편집본일 수 있어요. 길이가 다르면 많이 본 구간과 적게 본 구간의 시각이 파일과 어긋날 수 있어요. 같은 영상을 고르거나 "연결 해제"를 누르세요.
+올린 파일과 YouTube 영상이 서로 다른 영상이거나 한쪽이 편집본일 수 있어요. 길이가 다르면 많이 본 구간의 시각이 파일과 어긋날 수 있어요. 같은 영상을 고르거나 "연결 해제"를 누르세요.
 
 ### 다시 분석했더니 편집한 내용이 사라졌어요
 
@@ -240,9 +243,11 @@ Shorts 생성 프롬프트를 모두 지워도 버튼이 잠겨요. 이때는 "�
 | 헤드라인 | Shorts 내내 떠 있는 큰 제목 글씨 |
 | 스타일 | 클립이 보이는 모양. 헤드라인, 영상 배치, 색과 글꼴, 글자 위치, 얹은 이미지를 묶어 불러요 |
 | Shorts 생성 프롬프트 | 분석할 때 Gemini에게 주는 지시문 |
+| 설명란 챕터 목차 | 연결한 원본 영상 설명란에서 뽑아낸 시간대별 챕터 목록. 챕터가 없으면 생략해요 |
 | 시청자 유지율 | 영상의 각 지점을 시청자가 얼마나 봤는지 보여 주는 YouTube Analytics 통계 |
 | 말로 편집 | 말이나 글로 요청하면 편집을 대신해 주는 기능 |
 | MP4 만들기 | 편집한 Shorts 한 편을 MP4 파일로 만드는 일 |
+| 썸네일 설정, 예약 발행, 첫 댓글 자동 등록 | Shorts를 YouTube에 올릴 때 표지 등록, 골든타임 예약 공개, 원본 영상 유입용 댓글 등록을 함께 설정하는 기능 |
 
 코드와 설계 문서에서 쓰는 영어 이름은 [CONTEXT.md](CONTEXT.md)에 정리돼 있어요.
 
@@ -266,10 +271,12 @@ Shorts 생성 프롬프트를 모두 지워도 버튼이 잠겨요. 이때는 "�
 cp .env.example .env   # OAuth 클라이언트와 Gemini 연결 방식 채우기
 uv sync
 npm --prefix frontend install
-npm --prefix frontend run dev
+./dev.sh
 ```
 
-브라우저에서 http://localhost:3000 을 여세요. `npm run dev`는 Vite 개발 서버를 3000번 포트에 띄우고, 5000번 포트에서 백엔드가 응답하지 않으면 `uv run python -m src.main`으로 백엔드도 같이 띄워요. 백엔드는 코드가 바뀌어도 저절로 다시 시작하지 않아요. Python 코드나 `.env`를 고쳤다면 dev 서버를 껐다 켜세요.
+브라우저에서 http://localhost:3000 을 여세요. `./dev.sh`는 `.env`에 `GOOGLE_CLOUD_PROJECT`나 `STUDIO_SPEECH_PROJECT`가 있으면 먼저 ADC를 확인해요. 없거나 만료됐으면 `gcloud auth application-default login`을 띄우고, 로그인이 끝나면 `npm --prefix frontend run dev`를 실행해요. 프로젝트가 없는 Gemini API 키 구성에서는 확인을 건너뛰어요.
+
+`npm run dev`는 Vite 개발 서버를 3000번 포트에 띄우고, 5000번 포트에서 백엔드가 응답하지 않으면 `uv run python -m src.main`으로 백엔드도 같이 띄워요. 백엔드는 코드가 바뀌어도 저절로 다시 시작하지 않아요. Python 코드나 `.env`를 고쳤다면 dev 서버를 껐다 켜세요.
 
 - 백엔드만 띄우려면 `uv run python -m src.main`을 쓰세요. `frontend/dist`가 있으면 백엔드가 화면도 같이 보여 줘요. `npm --prefix frontend run build`로 만들 수 있어요.
 - API 문서는 백엔드의 `/docs`에 있어요. 로컬이면 http://localhost:5000/docs 예요.
@@ -365,7 +372,7 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 
 | 파일 | 만드는 것 |
 | --- | --- |
-| `terraform/apis.tf` | Cloud Run, Cloud Build, Artifact Registry, Compute Engine, Vertex AI, Speech-to-Text, Cloud Storage, YouTube Data, YouTube Reporting, YouTube Analytics, IAM, Cloud Resource Manager API |
+| `terraform/apis.tf` | Cloud Run, Cloud Build, Artifact Registry, Compute Engine, Vertex AI, Speech-to-Text, Cloud Storage, YouTube Data, YouTube Analytics, IAM, Cloud Resource Manager API |
 | `terraform/storage.tf` | Artifact Registry 저장소, 미디어 버킷 `<프로젝트>-<서비스>-media`. 공개 접근을 막고, 브라우저 업로드용 CORS를 두고, `retention_days`가 지나면 지워요. 기본은 1일이에요 |
 | `terraform/iam.tf` | 런타임 서비스 계정 `<서비스>-run@`. `roles/aiplatform.user`, `roles/speech.client`, 버킷 `roles/storage.objectAdmin` |
 | `terraform/service.tf` | Cloud Run v2 서비스. `invoker_iam_disabled = true`, h2c 8080 포트, 4 CPU, 8Gi, 인스턴스 0개에서 5개, 요청 제한 3600초, 2세대 실행 환경 |
@@ -386,7 +393,7 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 
 요청 하나가 지나가는 길은 이래요.
 
-- 분석은 `api/analysis.py`에서 `gemini/director.py`로 가요. director가 `media/`로 무음을 찾고 받아쓰고, `youtube/video_context.py`로 통계를 가져오고, `prompts/analysis.py`로 요청문을 만들어 Gemini를 불러요.
+- 분석은 `api/analysis.py`에서 `gemini/director.py`로 가요. director가 `media/`로 무음을 찾고 받아쓰고, `youtube/video_context.py`로 시청자 유지율·설명란 챕터·댓글과 맨 처음 분석용 기존 Shorts 성과를 가져오고, `prompts/analysis.py`로 요청문을 만들어 Gemini를 불러요.
 - 말로 편집은 `api/edit.py`에서 `edit_agent/agent.py`로 가요. 요청문은 `prompts/edit_agent.py`가 만들고, Gemini 답은 `edit_agent/checker.py`가 검사해요.
 - MP4 만들기는 `api/render.py`에서 `render/composer.py`로 가요.
 
@@ -400,7 +407,7 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | `src/api/deps.py` | 라우터들이 같이 쓰는 설정, Workspace, 오류 응답, 로그인 세션 확인 |
 | `src/api/studio.py` | `/api/health`, 화면이 처음 받는 설정, 글꼴 파일 |
 | `src/api/auth.py` | Google OAuth 2.0 로그인, 콜백, 로그아웃과 세션 쿠키 |
-| `src/api/youtube.py` | 채널 영상 목록, YouTube Video Context, Shorts 업로드 |
+| `src/api/youtube.py` | 채널 영상 목록, YouTube Video Context, 썸네일 추출·최적화와 Shorts 업로드 |
 | `src/api/uploads.py` | 원본 영상 업로드를 서버로 직접 또는 GCS로, 이미지·음악·영상 파일 업로드 |
 | `src/api/analysis.py` | 분석 NDJSON 스트림 |
 | `src/api/edit.py` | 말로 편집 |
@@ -408,8 +415,8 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | `src/core/config.py` | 환경 변수, 편집 기본값, 화질별 렌더 설정, 기본 스타일 |
 | `src/core/models.py` | 요청과 응답의 pydantic 모델. camelCase로 직렬화해요. 말로 편집의 `EditRequest`, `EditResponse`도 여기 있어요 |
 | `src/core/fonts.py`, `src/core/fonts/` | 글꼴 목록과 글꼴 파일, 글꼴 파일에서 읽는 줄 높이 비율 |
-| `src/prompts/analysis.py` | 기본 Shorts 생성 프롬프트, 분석 지시문, 첫 분석과 빠른·정밀 분석 요청문, 분석 응답 스키마 |
-| `src/prompts/edit_agent.py` | 말로 편집 지시문과 요청문. 보고 있는 Shorts, 고른 클립, 재생 위치, 대화, 단어 번호를 붙인 전체 자막, 시청자 데이터, 올린 파일, 글꼴이 들어가요 |
+| `src/prompts/analysis.py` | 기본 Shorts 생성 프롬프트, 분석 지시문, 첫 분석과 빠른·정밀 분석 요청문, 챕터·유지율·댓글과 첫 분석용 기존 Shorts 성과 주입, 추천 썸네일 시각을 포함한 분석 응답 스키마 |
+| `src/prompts/edit_agent.py` | 말로 편집 지시문과 요청문. 보고 있는 Shorts, 고른 클립, 재생 위치, 대화, 단어 번호를 붙인 전체 자막, 챕터·유지율·댓글, 올린 파일, 글꼴이 들어가요 |
 | `src/gemini/client.py` | API 키 또는 Vertex AI 클라이언트, ADC 토큰 확인 |
 | `src/gemini/director.py` | Gemini AGENTIC 호출, Context Cache 만들기와 재사용, 전체 자막과 YouTube 데이터 보관, 모델 대체 순서, 재시도, 응답 검증, 토큰 집계. 말로 편집도 여기의 `run_gemini`로 불러요 |
 | `src/gemini/pricing.py` | 모델별 정가표와 확인 날짜, 출처. 호출 비용과 캐시 쓰기 비용 계산 |
@@ -420,12 +427,12 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | `src/edit_agent/values.py` | 답의 값 읽기. 숫자, 비율, 초, 색, 글꼴, 파일 이름과 공용 한도 |
 | `src/youtube/oauth.py` | OAuth 범위, 토큰 교환과 갱신, 채널 프로필 |
 | `src/youtube/videos.py` | 내 채널 롱폼 영상 목록 |
-| `src/youtube/video_context.py` | YouTube Analytics API v2 시청자 유지율 곡선과 많이 본·적게 본 구간, 댓글, 공식 자막 |
-| `src/youtube/shorts_upload.py` | 완성한 MP4를 내 채널에 이어 올리기 |
+| `src/youtube/video_context.py` | YouTube Analytics API v2 시청자 유지율 곡선과 많이 본 구간(앞부분은 낮은 가중치), 설명란 챕터 타임스탬프 파싱, 댓글, 내 채널 기존 Shorts 성과, 공식 자막 |
+| `src/youtube/shorts_upload.py` | 완성한 MP4를 내 채널에 이어 올리기, 예약 발행(`publishAt`), 커스텀 썸네일 등록(`thumbnails.set`), 첫 댓글 자동 등록(`commentThreads.insert`) |
 | `src/youtube/common.py` | YouTube API 공용 HTTP 클라이언트, 인증 헤더, 오류 |
 | `src/render/composer.py` | 브라우저가 보낸 구간을 프레임 단위로 맞춘 하드 컷 타임라인, ffmpeg 필터 그래프, ASS 자막 |
 | `src/render/layout.py` | 템플릿 기하. 영상 박스, 크롭, 글자 기본 위치. 헤드라인은 박스 위, 자막은 박스 아래예요 |
-| `src/media/ingestion.py` | ffprobe, 무음 찾기, 분석용 사본, 받아쓰기를 단어 목록으로 바꾸기 |
+| `src/media/ingestion.py` | ffprobe, 무음 찾기, 분석용 사본, 받아쓰기를 단어 목록으로 바꾸기, 썸네일 프레임 추출과 이미지 최적화 |
 | `src/media/speech.py` | Cloud Speech-to-Text V2 `chirp_3`로 원본 음성을 단어 시각과 함께 받아쓰기 |
 | `src/infra/storage.py` | 원본, 분석용 사본, 전체 자막, YouTube 데이터, 캐시 정보, 로그인 세션, 이미지와 음악, 렌더 결과 보관. `STUDIO_GCS_BUCKET`이 있으면 GCS에 두고 로컬 디스크는 캐시로 써요 |
 | `src/infra/gcp.py` | ADC 토큰, 로컬에서 Vertex AI·Speech-to-Text API가 꺼져 있으면 켜기 |
@@ -436,7 +443,7 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | --- | --- |
 | `main.tsx`, `App.tsx` | 앱 시작, 서버 설정 불러오기, 로그인 화면 |
 | `components/Studio.tsx` | 시작, 분석 중, 편집 화면 전환. 업로드, 이미지와 음악, 프롬프트, 분석 세션을 들고 있어요 |
-| `components/StartScreen.tsx`, `PromptEditor.tsx` | 시작 화면, 내 채널 영상 연결과 데이터 튜닝, Shorts 생성 프롬프트 |
+| `components/StartScreen.tsx`, `PromptEditor.tsx` | 시작 화면, 내 채널 영상 연결, Shorts 생성 프롬프트 |
 | `components/AnalyzingScreen.tsx` | 분석 중 화면 |
 | `components/EditorScreen.tsx` | 편집 화면 배치, 시나리오 줄, 머리글 버튼, 오른쪽 탭, 반응·댓글 패널, 단축키 |
 | `components/ClipEditor.tsx`, `RangeSlider.tsx` | 클립 목록과 구간 막대, 시청자 유지율 곡선과 표시 |
@@ -444,7 +451,7 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | `components/LookControls.tsx`, `LookStyleFields.tsx` | 스타일 탭. 적용 범위, 헤드라인, 영상 배치, 색과 글꼴, 글 위치, 이미지 |
 | `components/ScenarioAudioControls.tsx` | 소리 탭. 배경음악과 볼륨 |
 | `components/EditAgentBar.tsx` | 말로 편집 창 |
-| `components/ReanalyzeDialog.tsx`, `ExportDialog.tsx` | 다시 분석, 내보내기 대화상자 |
+| `components/ReanalyzeDialog.tsx`, `ExportDialog.tsx` | 다시 분석, 내보내기와 YouTube 업로드 대화상자 |
 | `components/AppHeader.tsx`, `ThemeMenu.tsx`, `ui.tsx`, `Icon.tsx` | 머리글, 테마 메뉴, 공통 UI, 아이콘 |
 | `components/preview/` | canvas로 그리는 9:16 미리보기, 글자와 이미지와 영상 박스 끌기 |
 | `hooks/` | 분석 스트림, 원본 업로드, 이미지와 음악, 점프컷 재생, 배경음악 맞추기, 음성 입력, 테마 |
@@ -468,9 +475,9 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 | GET | `/api/shortform/auth/login` | Google 동의 화면으로 보내기 |
 | GET | `/api/shortform/auth/callback` | OAuth 코드를 토큰으로 바꾸고 세션 쿠키를 심은 뒤 `/`로 돌려보내기 |
 | POST | `/api/shortform/auth/logout` | 세션 지우기 |
-| GET | `/api/shortform/youtube/videos` | 내 채널 롱폼 영상 목록. `#shorts`, `#쇼츠`가 붙은 영상은 빼고 최신순이에요 |
-| GET | `/api/shortform/youtube/videos/{video_id}/context` | 고른 영상의 정보, 시청자 유지율 곡선과 많이 본·적게 본 구간, 댓글, 공식 자막 |
-| POST | `/api/shortform/youtube/upload` | 만든 MP4를 내 채널에 Shorts로 올리기 |
+| GET | `/api/shortform/youtube/videos` | 내 채널 롱폼 영상 목록(`#shorts`, `#쇼츠` 제외 최신순)과 첫 분석 프롬프트 자동 적용용 내 채널 기존 Shorts 성과 |
+| GET | `/api/shortform/youtube/videos/{video_id}/context` | 고른 영상의 정보, 설명란 챕터 목차, 시청자 유지율 곡선과 많이 본 구간, 댓글, 내 채널 기존 Shorts 성과, 공식 자막 |
+| POST | `/api/shortform/youtube/upload` | 만든 MP4를 내 채널에 Shorts로 올리기. 예약 발행, 커스텀 썸네일 등록, 첫 댓글 자동 등록을 함께 처리해요 |
 | POST | `/api/shortform/upload-source/init` | 버킷이 있으면 브라우저가 원본을 GCS에 바로 올릴 이어 올리기 주소를 줘요. 버킷이 없으면 `mode`가 `direct`예요 |
 | POST | `/api/shortform/upload-source/complete` | GCS에 올라간 원본의 크기를 확인하고 정보를 저장 |
 | POST | `/api/shortform/upload-source` | 버킷이 없을 때 원본을 서버로 바로 올리고 길이, 화면 크기, 소리 유무를 재기 |
@@ -484,5 +491,5 @@ GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret" \
 
 - [CONTEXT.md](CONTEXT.md)에 화면과 코드에서 쓰는 용어가 있어요.
 - [docs/adr](docs/adr)에 설계 결정 기록 12개가 있어요.
-- [docs/index.html](docs/index.html)은 크리에이터용 실습 가이드예요.
+- [docs/index.html](docs/index.html)은 현장용 20분 실습 가이드이고, [docs/fullguide.html](docs/fullguide.html)은 15단계 전체 실습 가이드예요.
 - [frontend/README.md](frontend/README.md)에 프런트엔드 작업 메모가 있어요.

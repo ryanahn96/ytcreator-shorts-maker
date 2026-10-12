@@ -182,6 +182,8 @@ export interface Scenario {
   /** Internal name for tabs and file names; not drawn on the video. */
   title: string;
   rationale: string;
+  /** Source Video second recommended by Gemini for the Shorts thumbnail. */
+  thumbnailSec?: number | null;
   /** The Look shared by every Clip without its own. */
   look: Look;
   music: BackgroundMusic | null;
@@ -225,9 +227,26 @@ export interface YouTubeComment {
   timestampSec: number | null;
 }
 
+export interface YouTubeChapter {
+  startSec: number;
+  title: string;
+}
+
+export interface YouTubeShortStat {
+  videoId: string;
+  title: string;
+  durationSec: number;
+  views: number;
+  averageViewDurationSec: number;
+  averageViewPercentage: number;
+  likes: number;
+  subscribersGained: number;
+}
+
 export interface YouTubeVideoContext {
   videoId: string;
   title: string;
+  description?: string;
   publishedAt: string;
   durationSec: number;
   viewCount: number;
@@ -236,8 +255,9 @@ export interface YouTubeVideoContext {
   privacyStatus: string;
   retentionPoints: YouTubeRetentionPoint[];
   retentionPeaks: YouTubeRetentionPeak[];
-  retentionLows: YouTubeRetentionPeak[];
   comments: YouTubeComment[];
+  chapters?: YouTubeChapter[];
+  channelShorts?: YouTubeShortStat[];
   captionWords: TranscriptWord[];
   captionLineStarts: number[];
   captionLanguage: string;
@@ -274,6 +294,7 @@ export interface YouTubeVideoItem {
 
 export interface YouTubeVideoList {
   videos: YouTubeVideoItem[];
+  channelShorts?: YouTubeShortStat[];
 }
 
 export interface YouTubeUploadRequest {
@@ -281,11 +302,18 @@ export interface YouTubeUploadRequest {
   title: string;
   description: string;
   privacyStatus: YouTubePrivacy;
+  publishAt?: string | null;
+  firstComment?: string;
+  thumbnailTimeSec?: number | null;
+  thumbnailAssetId?: string | null;
 }
 
 export interface YouTubeUploadResult {
   watchUrl: string;
   studioUrl: string;
+  commentPosted?: boolean;
+  thumbnailSet?: boolean;
+  warnings?: string[];
 }
 
 export interface AnalysisResult {
@@ -298,8 +326,8 @@ export interface AnalysisResult {
   youtubeVideoId?: string;
   retentionPoints?: YouTubeRetentionPoint[];
   retentionPeaks?: YouTubeRetentionPeak[];
-  retentionLows?: YouTubeRetentionPeak[];
   youtubeComments?: YouTubeComment[];
+  chapters?: YouTubeChapter[];
 }
 
 export interface AnalyzeRequest {
@@ -369,11 +397,10 @@ export interface UploadedSource {
   hasAudio: boolean;
 }
 
-export interface LocalVideoMetadata {
-  durationSec: number;
-  width: number;
-  height: number;
-}
+export type LocalVideoMetadata = Pick<
+  UploadCompleteRequest,
+  'durationSec' | 'width' | 'height'
+>;
 
 export interface UploadInitResponse {
   mode: 'gcs' | 'direct';

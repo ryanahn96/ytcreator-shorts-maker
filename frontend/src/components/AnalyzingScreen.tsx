@@ -43,7 +43,7 @@ export function AnalyzingScreen(props: {
   const elapsedSec = useElapsedSec(progress.startedAt);
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-10 px-6 pb-[10vh] text-center">
-      <div className="analysis-orb" aria-hidden>
+      <div className="relative grid size-36 place-items-center" aria-hidden>
         <span className="analysis-orb-glow" />
         <span className="analysis-orb-ring" />
         {/* Positioned so it paints above the positioned glow and ring. */}

@@ -15,14 +15,9 @@ from google.auth.transport import requests as google_auth_requests
 from google.genai import types
 
 from src.core import config
-from src.core import models
 from src.infra import gcp
 
 _CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
-_LABELS: dict[models.GeminiBackend, str] = {
-    'ai_studio': 'Gemini API',
-    'vertex': 'Vertex AI',
-}
 _VERTEX_LOGIN_HINT = (
     '터미널에서 `gcloud auth application-default login`을 실행한 뒤 페이지를 '
     '새로고침하고 다시 시도하세요.'
@@ -31,7 +26,7 @@ _VERTEX_LOGIN_HINT = (
 
 def label(settings: config.Settings) -> str:
   """Returns the backend name used in error messages."""
-  return _LABELS[settings.gemini_backend]
+  return 'Vertex AI' if settings.gemini_backend == 'vertex' else 'Gemini API'
 
 
 def make_client(settings: config.Settings) -> genai.Client:

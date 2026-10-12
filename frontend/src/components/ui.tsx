@@ -19,19 +19,13 @@ export const STATE_LAYER =
   'focus-visible:before:opacity-10 active:before:opacity-12 ' +
   'disabled:before:hidden';
 
-type ButtonVariant =
-  | 'filled'
-  | 'tonal'
-  | 'outlined'
-  | 'text'
-  | 'danger'
-  | 'gradient';
+type ButtonVariant = keyof typeof BUTTON_VARIANTS;
 
 const FILLED_DISABLED =
   'disabled:bg-on-surface/12 disabled:bg-none disabled:text-on-surface/38 ' +
   'disabled:shadow-none';
 
-const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+const BUTTON_VARIANTS = {
   filled: `bg-primary text-on-primary hover:shadow-sm ${FILLED_DISABLED}`,
   tonal:
     'bg-secondary-container text-on-secondary-container hover:shadow-sm ' +
@@ -57,7 +51,7 @@ export function buttonClass(
   return [
     'inline-flex shrink-0 items-center justify-center rounded-full',
     'font-medium tracking-[0.01em] whitespace-nowrap transition-shadow',
-    'disabled:cursor-not-allowed',
+    'cursor-pointer disabled:cursor-not-allowed',
     STATE_LAYER,
     BUTTON_VARIANTS[variant],
     BUTTON_SIZES[size],
@@ -103,7 +97,7 @@ export function iconButtonClass(
   const box = {sm: 'h-8 w-8', md: 'h-10 w-10'}[size];
   return [
     'inline-grid shrink-0 place-items-center rounded-full',
-    'disabled:cursor-not-allowed',
+    'cursor-pointer disabled:cursor-not-allowed',
     STATE_LAYER,
     ICON_BUTTON_VARIANTS[variant],
     box,
@@ -222,11 +216,7 @@ export function NumberField(props: {
           step={props.step}
           min={props.min}
           onBlur={(event) => commit(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-          }}
+          onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
           className={`${TEXT_FIELD} w-24 text-right`}
         />
         <span className="text-on-surface-variant">{props.suffix}</span>
@@ -320,11 +310,7 @@ export function ColorField(props: {
           maxLength={7}
           spellCheck={false}
           onBlur={(event) => commit(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-          }}
+          onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
           className={`${TEXT_FIELD} w-24 uppercase`}
         />
       </span>
@@ -430,7 +416,7 @@ export function Segmented<T extends string>(props: {
             aria-checked={selected}
             disabled={props.disabled}
             onClick={() => props.onChange(option.value)}
-            className={`h-8 min-w-0 flex-1 truncate rounded-full px-3 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${STATE_LAYER} ${
+            className={`h-8 min-w-0 flex-1 truncate rounded-full px-3 text-[13px] font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${STATE_LAYER} ${
               selected
                 ? 'bg-secondary-container text-on-secondary-container'
                 : 'text-on-surface-variant'

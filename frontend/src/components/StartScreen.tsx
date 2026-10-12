@@ -1,9 +1,9 @@
 /**
  * The first screen: drop or pick the Source Video file, optionally pick the
  * same long-form video from the signed-in creator's YouTube channel by hand
- * (to pull its Audience Retention peaks/lows, viewer comments, and official
- * captions), optionally tune the Editorial Prompt with those data insights,
- * then start the analysis with "Shorts 만들기".
+ * (to pull its Audience Retention peaks, viewer comments, and official
+ * captions; the server adds them to every analysis request), then start the
+ * analysis with "Shorts 만들기".
  */
 
 import {useEffect, useState, type DragEvent, type ReactNode} from 'react';
@@ -116,6 +116,14 @@ function buildDataTunedPrompt(
   if (context.title) {
     lines.push(`- 연결된 원본 YouTube 영상: "${context.title}"`);
   }
+  if (context.chapters && context.chapters.length > 0) {
+    lines.push(
+      '- [설명란 챕터 목차] 원본 영상의 챕터 구분을 참고해 각 챕터의 주제 전환과 구간 경계를 시나리오 기획과 클립 선별에 반영하세요:',
+    );
+    for (const chapter of context.chapters.slice(0, 10)) {
+      lines.push(`  * ${formatClock(chapter.startSec)}: ${chapter.title}`);
+    }
+  }
   if (context.retentionPeaks.length > 0) {
     lines.push(
       '- [시청자 집중 피크 구간 — 최우선 선별] 아래 구간은 시청자가 가장 많이 보거나 반복 시청한 하이라이트이므로 각 Shorts의 첫 도입부(Hook)나 핵심 Clip으로 적극 포함하세요:',
@@ -128,20 +136,9 @@ function buildDataTunedPrompt(
       );
     }
   }
-  if (context.retentionLows.length > 0) {
-    lines.push(
-      '- [시청자 이탈·저조 구간 — 제외 지시] 아래 구간은 시청자가 스킵하거나 이탈한 구간이므로 Shorts 클립에서 제외하세요:',
-    );
-    for (const low of context.retentionLows) {
-      const watchPct = Math.round(low.watchRatio * 100);
-      lines.push(
-        `  * ${formatClock(low.startSec)} ~ ${formatClock(low.endSec)} (유지율 ${watchPct}% · ${low.label})`,
-      );
-    }
-  }
   if (context.comments.length > 0) {
     lines.push(
-      '- [실제 시청자 댓글 반응 반영] 시청자들이 댓글로 극찬하거나 언급한 아래 포인트와 타임스탬프를 시나리오 주제 및 상단 헤드라인 문구에 반영하세요:',
+      '- [실제 시청자 댓글 반응 반영] 시청자들이 댓글로 언급한 타임스탬프는 클립 구간 선별에만 참고하고, 댓글의 생생한 반응과 공감 포인트를 실제 Shorts 스타일의 클릭 유도형 제목 및 상단 헤드라인 훅(Hook) 문구로 적극 활용하세요(단, 00:14 같은 타임스탬프는 제목·헤드라인에 넣지 마세요):',
     );
     for (const comment of context.comments.slice(0, 5)) {
       const cleanText = comment.text.replace(/\s+/g, ' ').slice(0, 110);
@@ -162,14 +159,13 @@ function buildDataTunedPrompt(
   return `${basePrompt}\n\n${lines.join('\n')}\n`;
 }
 
-/** Draws an SVG chart of the Audience Retention curve with peak/low bands. */
+/** Draws an SVG chart of the Audience Retention curve with peak bands. */
 export function RetentionSparkline(props: {
   points: readonly YouTubeRetentionPoint[];
   peaks?: readonly YouTubeRetentionPeak[];
-  lows?: readonly YouTubeRetentionPeak[];
   durationSec?: number;
 }) {
-  const {points, peaks = [], lows = [], durationSec = 0} = props;
+  const {points, peaks = [], durationSec = 0} = props;
   if (points.length < 2) {
     return null;
   }
@@ -189,10 +185,7 @@ export function RetentionSparkline(props: {
       aria-label="YouTube 시청자 유지율 곡선"
     >
       {durationSec > 0 &&
-        [
-          ...peaks.map((band) => ({band, fill: 'fill-primary/20'})),
-          ...lows.map((band) => ({band, fill: 'fill-error/15'})),
-        ].map(({band, fill}, idx) => {
+        peaks.map((band, idx) => {
           const x = Math.max(0, (band.startSec / durationSec) * 100);
           const w = Math.max(
             1,
@@ -205,7 +198,7 @@ export function RetentionSparkline(props: {
               y={2}
               width={Math.min(100 - x, w)}
               height={36}
-              className={fill}
+              className="fill-primary/20"
             />
           );
         })}
@@ -229,13 +222,7 @@ function YouTubeChannelLinkSection(props: {
   onChange: (videoId: string) => void;
   onTunePrompt: (context: YouTubeVideoContext) => void;
 }) {
-  const {
-    videoId,
-    durationSec,
-    hasUploadedFile,
-    onChange,
-    onTunePrompt,
-  } = props;
+  const {videoId, durationSec, hasUploadedFile, onChange, onTunePrompt} = props;
   const [isOpen, setIsOpen] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideoItem[] | null>(null);
   const [loadingList, setLoadingList] = useState(false);
@@ -301,6 +288,7 @@ function YouTubeChannelLinkSection(props: {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, durationSec]);
 
   const selectedItem =
@@ -365,10 +353,7 @@ function YouTubeChannelLinkSection(props: {
               variant="text"
               size="sm"
               icon="close"
-              onClick={() => {
-                setManualInput('');
-                onChange('');
-              }}
+              onClick={() => onChange('')}
             >
               연결 해제
             </Button>
@@ -429,15 +414,11 @@ function YouTubeChannelLinkSection(props: {
                   <span className="font-medium text-on-surface">
                     시청자 유지율
                   </span>
-                  <span>
-                    피크 {context.retentionPeaks.length} · 이탈{' '}
-                    {context.retentionLows.length}
-                  </span>
+                  <span>피크 {context.retentionPeaks.length}</span>
                 </div>
                 <RetentionSparkline
                   points={context.retentionPoints}
                   peaks={context.retentionPeaks}
-                  lows={context.retentionLows}
                   durationSec={context.durationSec || durationSec}
                 />
               </div>
@@ -447,66 +428,30 @@ function YouTubeChannelLinkSection(props: {
               </p>
             )}
 
-            {/* High-retention peaks & Low-retention drop-offs */}
-            {(context.retentionPeaks.length > 0 ||
-              context.retentionLows.length > 0) && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-                    <Icon name="insights" size={16} className="text-primary" />
-                    많이 본 구간
-                  </p>
-                  {context.retentionPeaks.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">없음</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {context.retentionPeaks.map((peak, index) => (
-                        <div
-                          key={index}
-                          className="rounded-lg bg-secondary-container/70 px-3 py-2 text-xs text-on-secondary-container"
-                        >
-                          <div className="flex items-center justify-between font-semibold tabular-nums">
-                            <span>
-                              {formatClock(peak.startSec)} –{' '}
-                              {formatClock(peak.endSec)}
-                            </span>
-                            <span>
-                              유지율 {Math.round(peak.watchRatio * 100)}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+            {/* High-retention peaks */}
+            {context.retentionPeaks.length > 0 && (
+              <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <Icon name="insights" size={16} className="text-primary" />
+                  많이 본 구간
+                </p>
+                <div className="space-y-1.5">
+                  {context.retentionPeaks.map((peak, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg bg-secondary-container/70 px-3 py-2 text-xs text-on-secondary-container"
+                    >
+                      <div className="flex items-center justify-between font-semibold tabular-nums">
+                        <span>
+                          {formatClock(peak.startSec)} –{' '}
+                          {formatClock(peak.endSec)}
+                        </span>
+                        <span>
+                          유지율 {Math.round(peak.watchRatio * 100)}%
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-                    <Icon name="warning" size={16} className="text-error" />
-                    이탈 구간
-                  </p>
-                  {context.retentionLows.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">없음</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {context.retentionLows.map((low, index) => (
-                        <div
-                          key={index}
-                          className="rounded-lg bg-error-container/60 px-3 py-2 text-xs text-on-error-container"
-                        >
-                          <div className="flex items-center justify-between font-semibold tabular-nums">
-                            <span>
-                              {formatClock(low.startSec)} –{' '}
-                              {formatClock(low.endSec)}
-                            </span>
-                            <span>
-                              유지율 {Math.round(low.watchRatio * 100)}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
@@ -549,6 +494,28 @@ function YouTubeChannelLinkSection(props: {
                 </div>
               )}
             </div>
+
+            {/* Description chapters (skipped completely if empty) */}
+            {context.chapters && context.chapters.length > 0 && (
+              <div className="space-y-2 rounded-xl bg-surface-container-low p-3">
+                <p className="text-xs font-semibold text-on-surface">
+                  설명란 챕터 목차 ({context.chapters.length}개)
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {context.chapters.map((chapter, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1 text-xs text-on-surface"
+                    >
+                      <span className="font-semibold text-primary tabular-nums">
+                        {formatClock(chapter.startSec)}
+                      </span>
+                      <span className="truncate max-w-48">{chapter.title}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -703,15 +670,14 @@ function useFileDrop(onFile: (file: File) => void, onReject: () => void) {
 }
 
 function DropZone(props: {
-  dragging: boolean;
-  handlers: ReturnType<typeof useFileDrop>['handlers'];
+  drop: ReturnType<typeof useFileDrop>;
   onFile: (file: File) => void;
 }) {
   return (
     <div
-      {...props.handlers}
+      {...props.drop.handlers}
       className={`flex min-h-80 flex-col items-center justify-center gap-6 rounded-[28px] border-2 border-dashed px-6 py-12 text-center transition-colors ${
-        props.dragging
+        props.drop.dragging
           ? 'border-primary bg-primary-container/40'
           : 'border-outline-variant bg-surface-container-low'
       }`}
@@ -736,8 +702,7 @@ function DropZone(props: {
 
 function FileCard(props: {
   upload: Exclude<UploadState, {status: 'empty'}>;
-  dragging: boolean;
-  handlers: ReturnType<typeof useFileDrop>['handlers'];
+  drop: ReturnType<typeof useFileDrop>;
   onFile: (file: File) => void;
   children?: ReactNode;
 }) {
@@ -763,9 +728,9 @@ function FileCard(props: {
   }
   return (
     <div
-      {...props.handlers}
+      {...props.drop.handlers}
       className={`rounded-[28px] p-6 transition-colors ${
-        props.dragging
+        props.drop.dragging
           ? 'bg-primary-container/40 ring-2 ring-primary'
           : 'bg-surface-container'
       }`}
@@ -864,18 +829,9 @@ export function StartScreen(props: {
         </Notice>
       )}
       {upload.status === 'empty' ? (
-        <DropZone
-          dragging={drop.dragging}
-          handlers={drop.handlers}
-          onFile={pick}
-        />
+        <DropZone drop={drop} onFile={pick} />
       ) : (
-        <FileCard
-          upload={upload}
-          dragging={drop.dragging}
-          handlers={drop.handlers}
-          onFile={pick}
-        >
+        <FileCard upload={upload} drop={drop} onFile={pick}>
           {ready && (
             <div className="rise-in mt-6 flex justify-center">
               <Button

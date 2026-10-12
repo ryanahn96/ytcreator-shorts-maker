@@ -126,6 +126,4 @@ def cache_write_cost_usd(
 def total_usd(costs: Sequence[float | None]) -> float | None:
   """Adds call costs; one unknown cost makes the total unknown."""
   known = [cost for cost in costs if cost is not None]
-  if len(known) < len(costs):
-    return None
-  return sum(known)
+  return sum(known) if len(known) == len(costs) else None

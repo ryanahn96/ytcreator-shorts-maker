@@ -195,10 +195,6 @@ function pauseRemovals(
   return removals;
 }
 
-function captionText(word: TranscriptWord, edits: TranscriptEdits): string {
-  return (edits.wordText.get(word.index) ?? word.text).trim();
-}
-
 function maxWordDurationSec(text: string): number {
   const clean = text.replace(/[.,?!:;"'()[\]…\-—]/g, '').length;
   return Math.min(1.2, Math.max(0.35, Math.max(1, clean) * 0.16 + 0.15));
@@ -232,7 +228,7 @@ function captionCues(
   let previousStart = clip.startSec;
   let previousEnd = clip.startSec;
   for (const word of words) {
-    const text = captionText(word, edits);
+    const text = (edits.wordText.get(word.index) ?? word.text).trim();
     if (word.isSoundTag || edits.cutWords.has(word.index) || !text) {
       continue;
     }
@@ -389,51 +385,28 @@ export function resolveScenario(input: {
   for (const clip of scenario.clips) {
     const look = effectiveLook(scenario, clip);
     const mediaKind: ClipMediaKind = clip.mediaKind ?? 'source';
-    if (mediaKind !== 'source') {
-      const duration = clip.endSec - clip.startSec;
-      const subcuts: TimeRange[] =
-        duration >= settings.minSubcutSec && Boolean(clip.assetId)
-          ? [{startSec: clip.startSec, endSec: clip.endSec}]
-          : [];
-      if (subcuts.length === 0) {
-        clips.push({clip, look, words: [], subcuts, planIndex: null});
-        continue;
-      }
-      const planIndex = planClips.length;
-      planClips.push({
-        subcuts,
-        look: {...look, headline: {lines: shownHeadlineLines(look.headline.lines)}},
-        mediaKind,
-        assetId: clip.assetId ?? null,
-        muteAudio: Boolean(clip.muteAudio),
-      });
-      clips.push({
-        clip,
-        look,
-        words: [],
-        subcuts,
-        planIndex,
-      });
+    const source = mediaKind === 'source';
+    const words = source ? wordsStartingIn(transcript.words, clip) : [];
+    const subcuts: TimeRange[] = source
+      ? clipSubcuts({range: clip, words, edits, pauses, settings})
+      : clip.endSec - clip.startSec >= settings.minSubcutSec && clip.assetId
+        ? [{startSec: clip.startSec, endSec: clip.endSec}]
+        : [];
+    const planIndex = subcuts.length > 0 ? planClips.length : null;
+    clips.push({clip, look, words, subcuts, planIndex});
+    if (planIndex === null) {
       continue;
     }
-    const words = wordsStartingIn(transcript.words, clip);
-    const subcuts = clipSubcuts({range: clip, words, edits, pauses, settings});
-    if (subcuts.length === 0) {
-      clips.push({clip, look, words, subcuts, planIndex: null});
-      continue;
-    }
-    const planIndex = planClips.length;
     planClips.push({
       subcuts,
       look: {...look, headline: {lines: shownHeadlineLines(look.headline.lines)}},
-      mediaKind: 'source',
-      assetId: null,
-      muteAudio: false,
+      mediaKind,
+      assetId: source ? null : (clip.assetId ?? null),
+      muteAudio: !source && Boolean(clip.muteAudio),
     });
     cues.push(
       ...captionCues({clip, words}, planIndex, transcript, edits, pauses, settings),
     );
-    clips.push({clip, look, words, subcuts, planIndex});
   }
   const plan: RenderPlan | null =
     planClips.length > 0 ? {clips: planClips, cues, music: scenario.music} : null;
@@ -474,3 +447,42 @@ export function locateOutput(
     sourceSec: Math.min(segment.startSec + offset, segment.endSec),
   };
 }
+
+/** Maps a Source Video timestamp in seconds to its nearest position on the output timeline. */
+export function sourceToOutputSec(
+  sourceSec: number,
+  segments: readonly OutputSegment[],
+): number {
+  const sourceSegments = segments.filter((s) => s.mediaKind === 'source');
+  if (sourceSegments.length === 0) {
+    return 0;
+  }
+  const insideEnd = (s: OutputSegment) =>
+    Math.max(s.outputStartSec, s.outputStartSec + (s.endSec - s.startSec) - 0.05);
+  for (const segment of sourceSegments) {
+    if (sourceSec >= segment.startSec && sourceSec <= segment.endSec) {
+      return roundMs(
+        Math.min(
+          insideEnd(segment),
+          segment.outputStartSec + (sourceSec - segment.startSec),
+        ),
+      );
+    }
+  }
+  let best = sourceSegments[0].outputStartSec;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const segment of sourceSegments) {
+    const startDist = Math.abs(sourceSec - segment.startSec);
+    if (startDist < bestDist) {
+      bestDist = startDist;
+      best = segment.outputStartSec;
+    }
+    const endDist = Math.abs(sourceSec - segment.endSec);
+    if (endDist < bestDist) {
+      bestDist = endDist;
+      best = insideEnd(segment);
+    }
+  }
+  return roundMs(best);
+}
+

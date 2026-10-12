@@ -19,7 +19,6 @@ import {formatClock} from '../../lib/format';
 import type {LookEdit} from '../../lib/look';
 import {
   locateOutput,
-  type OutputCue,
   type OutputSegment,
   type ResolvedScenario,
 } from '../../lib/timeline';
@@ -27,12 +26,6 @@ import type {Scenario, StudioConfig, TranscriptWord} from '../../types';
 import {IconButton} from '../ui';
 import {CanvasPreview} from './CanvasPreview';
 import {OverlayLayer} from './OverlayLayer';
-
-function activeCue(cues: readonly OutputCue[], outputSec: number): OutputCue | null {
-  return (
-    cues.find((cue) => cue.startSec <= outputSec && outputSec < cue.endSec) ?? null
-  );
-}
 
 /**
  * The Transcript Word spoken at `sourceSec`: the one around it, else the
@@ -167,9 +160,9 @@ export function PreviewStage(props: {
     props.assetUrls,
   );
   const style = config.templateStyle;
-  // Half the render size keeps drawing cheap; the frame scales it anyway.
-  const output = {width: style.canvasWidth / 2, height: style.canvasHeight / 2};
-  const cue = activeCue(resolved.cues, playback.outputSec);
+  const cue = resolved.cues.find(
+    (item) => item.startSec <= playback.outputSec && playback.outputSec < item.endSec,
+  );
   // The Clip on screen (Looks follow the picture), and the Look it shows.
   const located = locateOutput(resolved.segments, playback.outputSec);
   const activeSegment = located ? resolved.segments[located.index] : null;
@@ -240,47 +233,27 @@ export function PreviewStage(props: {
     if (!props.seekRequest) {
       return;
     }
-    const targetSourceSec = props.seekRequest.sourceSec;
+    const target = props.seekRequest.sourceSec;
     const current = latest.current;
-    const sourceSegments = current.resolved.segments.filter(
-      (seg) => (seg.mediaKind ?? 'source') === 'source',
-    );
-    const exact = sourceSegments.find(
-      (seg) => seg.startSec <= targetSourceSec && targetSourceSec <= seg.endSec,
-    );
-    if (exact) {
-      const targetOutputSec =
-        exact.outputStartSec + (targetSourceSec - exact.startSec);
-      current.playback.seekOutput(targetOutputSec);
-      const clipIdx = current.resolved.clips.findIndex(
-        (c) => c.planIndex === exact.planIndex,
+    // How far the target lies outside a segment; 0 when the segment holds it.
+    const distance = (seg: OutputSegment) =>
+      Math.max(seg.startSec - target, target - seg.endSec, 0);
+    const nearest = current.resolved.segments
+      .filter((seg) => seg.mediaKind === 'source')
+      .reduce<OutputSegment | null>(
+        (best, seg) => (best && distance(best) <= distance(seg) ? best : seg),
+        null,
       );
-      if (clipIdx >= 0) {
-        current.onSelectClip?.(clipIdx);
-      }
+    if (!nearest) {
       return;
     }
-    // Fallback: find the nearest source segment in the current scenario.
-    let nearest = sourceSegments[0];
-    let bestDist = Infinity;
-    for (const seg of sourceSegments) {
-      const dist =
-        targetSourceSec < seg.startSec
-          ? seg.startSec - targetSourceSec
-          : targetSourceSec - seg.endSec;
-      if (dist < bestDist) {
-        bestDist = dist;
-        nearest = seg;
-      }
-    }
-    if (nearest) {
-      current.playback.seekOutput(nearest.outputStartSec);
-      const clipIdx = current.resolved.clips.findIndex(
-        (c) => c.planIndex === nearest.planIndex,
-      );
-      if (clipIdx >= 0) {
-        current.onSelectClip?.(clipIdx);
-      }
+    const offset = distance(nearest) === 0 ? target - nearest.startSec : 0;
+    current.playback.seekOutput(nearest.outputStartSec + offset);
+    const clipIdx = current.resolved.clips.findIndex(
+      (c) => c.planIndex === nearest.planIndex,
+    );
+    if (clipIdx >= 0) {
+      current.onSelectClip?.(clipIdx);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekSeq]);
@@ -403,7 +376,6 @@ export function PreviewStage(props: {
         framing={look.framingLayout}
         lookStyle={look.style}
         style={style}
-        output={output}
         onVideo={setVideo}
         onExtVideo={setExtVideo}
         onToggle={toggle}

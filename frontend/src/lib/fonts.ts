@@ -24,11 +24,6 @@ export function fontStack(fontId: string): string {
   return `"${cssFamily(fontId)}", sans-serif`;
 }
 
-/** CSS font-size, in canvas units, of an ASS font size in this font. */
-export function cssFontSize(entry: FontEntry | undefined, assSize: number): number {
-  return assSize * (entry?.emPerLineBox ?? 1);
-}
-
 function register(entry: FontEntry): FontFace {
   const known = registered.get(entry.fontId);
   if (known) {

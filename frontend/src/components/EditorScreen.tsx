@@ -25,13 +25,14 @@ import type {AssetStore} from '../hooks/useAssets';
 import {editShorts, errorMessage, renderPlan} from '../lib/api';
 import {applyEditReply, buildEditRequest, type AppliedEdit} from '../lib/editAgent';
 import {createEditorState, type EditorAction} from '../lib/editor';
-import {tabOf, type FocusRequest, type FocusTarget} from '../lib/focus';
+import type {FocusRequest, FocusTarget} from '../lib/focus';
 import {formatClock, formatCost, formatDuration} from '../lib/format';
 import {useEditorHistory} from '../lib/history';
 import {effectiveLook, lookTarget, type LookEdit} from '../lib/look';
 import {
   clipSubcuts,
   resolveScenario,
+  sourceToOutputSec,
   wordsStartingIn,
   type ResolvedScenario,
   type Transcript,
@@ -45,6 +46,7 @@ import type {
   StudioConfig,
   TimeRange,
   UploadedSource,
+  YouTubeChapter,
   YouTubeComment,
   YouTubeRetentionPeak,
   YouTubeRetentionPoint,
@@ -266,8 +268,7 @@ function ScenarioList(props: {
 
 /**
  * Right-hand tab showing YouTube Audience Retention curve, high-watch peaks,
- * low-watch drop-off intervals, and actual viewer comments with quick seek &
- * clip-add actions.
+ * and actual viewer comments with quick seek & clip-add actions.
  */
 function YouTubeInsightsPanel(props: {
   youtubeVideoId?: string;
@@ -275,8 +276,8 @@ function YouTubeInsightsPanel(props: {
   clipIndex: number;
   retentionPoints?: readonly YouTubeRetentionPoint[];
   retentionPeaks?: readonly YouTubeRetentionPeak[];
-  retentionLows?: readonly YouTubeRetentionPeak[];
   comments?: readonly YouTubeComment[];
+  chapters?: readonly YouTubeChapter[];
   onSeekSource: (sourceSec: number) => void;
   dispatch: Dispatch<EditorAction>;
 }) {
@@ -286,8 +287,8 @@ function YouTubeInsightsPanel(props: {
     clipIndex,
     retentionPoints = [],
     retentionPeaks = [],
-    retentionLows = [],
     comments = [],
+    chapters = [],
     onSeekSource,
     dispatch,
   } = props;
@@ -312,170 +313,191 @@ function YouTubeInsightsPanel(props: {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <a
-          href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-        >
-          YouTube에서 열기
-          <Icon name="open_in_new" size={14} />
-        </a>
-      </div>
-
-      {/* Audience Retention Curve */}
-      <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <span className="block text-xs font-semibold text-on-surface">
-          시청자 유지율
-        </span>
-        {retentionPoints.length > 1 ? (
-          <RetentionSparkline
-            points={retentionPoints}
-            peaks={retentionPeaks}
-            lows={retentionLows}
-            durationSec={sourceDurationSec}
-          />
-        ) : (
-          <p className="text-xs text-on-surface-variant">
-            집계된 유지율 데이터가 없습니다.
-          </p>
-        )}
-      </div>
-
-      {/* High-retention peaks */}
-      <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-          <Icon name="insights" size={16} className="text-primary" />
-          많이 본 구간 ({retentionPeaks.length})
-        </p>
-        {retentionPeaks.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">없음</p>
-        ) : (
-          <div className="space-y-2">
-            {retentionPeaks.map((peak, idx) => (
-              <div
-                key={idx}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary-container/60 p-3 text-xs text-on-secondary-container"
-              >
-                <p className="min-w-0 flex-1 font-semibold tabular-nums">
-                  {formatClock(peak.startSec)} – {formatClock(peak.endSec)} ·
-                  유지율 {Math.round(peak.watchRatio * 100)}%
-                </p>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="text"
-                    size="sm"
-                    icon="play_arrow"
-                    onClick={() => onSeekSource(peak.startSec)}
-                  >
-                    미리보기
-                  </Button>
-                  <Button
-                    variant="tonal"
-                    size="sm"
-                    icon="add"
-                    onClick={() => addSpanAsClip(peak.startSec, peak.endSec)}
-                  >
-                    클립 추가
-                  </Button>
-                </div>
-              </div>
-            ))}
+      {youtubeVideoId && (
+        <>
+          <div className="flex justify-end">
+            <a
+              href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              YouTube에서 열기
+              <Icon name="open_in_new" size={14} />
+            </a>
           </div>
-        )}
-      </div>
 
-      {/* Low-retention / drop-off intervals */}
-      <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
-          <Icon name="warning" size={16} className="text-error" />
-          이탈 구간 ({retentionLows.length})
-        </p>
-        {retentionLows.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">없음</p>
-        ) : (
-          <div className="space-y-2">
-            {retentionLows.map((low, idx) => (
-              <div
-                key={idx}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-error-container/55 p-3 text-xs text-on-error-container"
-              >
-                <p className="min-w-0 flex-1 font-semibold tabular-nums">
-                  {formatClock(low.startSec)} – {formatClock(low.endSec)} ·
-                  유지율 {Math.round(low.watchRatio * 100)}%
-                </p>
-                <Button
-                  variant="text"
-                  size="sm"
-                  icon="play_arrow"
-                  onClick={() => onSeekSource(low.startSec)}
-                >
-                  위치 확인
-                </Button>
-              </div>
-            ))}
+          {/* Audience Retention Curve */}
+          <div className="space-y-2 rounded-2xl bg-surface p-4">
+            <span className="block text-xs font-semibold text-on-surface">
+              시청자 유지율
+            </span>
+            {retentionPoints.length > 1 ? (
+              <RetentionSparkline
+                points={retentionPoints}
+                peaks={retentionPeaks}
+                durationSec={sourceDurationSec}
+              />
+            ) : (
+              <p className="text-xs text-on-surface-variant">
+                집계된 유지율 데이터가 없습니다.
+              </p>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Viewer comments */}
-      <div className="space-y-2 rounded-2xl bg-surface p-4">
-        <p className="text-xs font-semibold text-on-surface">
-          댓글 ({comments.length})
-        </p>
-        {comments.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">없음</p>
-        ) : (
-          <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-            {comments.map((comment) => (
-              <div
-                key={comment.commentId}
-                className="rounded-xl bg-surface-container-low p-3 text-xs"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-on-surface-variant">
-                    <span className="font-semibold text-on-surface">
-                      {comment.author}
-                    </span>
-                    {comment.likeCount > 0 && (
-                      <span>👍 {comment.likeCount.toLocaleString()}</span>
-                    )}
-                    {comment.timestampSec !== null && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          comment.timestampSec !== null &&
-                          onSeekSource(comment.timestampSec)
-                        }
-                        className="inline-flex items-center gap-0.5 rounded-full bg-secondary-container px-2 py-0.5 font-medium text-on-secondary-container tabular-nums hover:ring-1 hover:ring-primary"
-                      >
-                        <Icon name="play_arrow" size={12} />
-                        {formatClock(comment.timestampSec)}
-                      </button>
-                    )}
-                  </div>
-                  {comment.timestampSec !== null && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        comment.timestampSec !== null &&
-                        addSpanAsClip(comment.timestampSec - 2, comment.timestampSec + 12)
-                      }
-                      className="rounded-lg bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/25"
+          {/* Description chapters (skipped completely if empty) */}
+          {chapters.length > 0 && (
+            <div className="space-y-2 rounded-2xl bg-surface p-4">
+              <p className="text-xs font-semibold text-on-surface">
+                설명란 챕터 목차 ({chapters.length})
+              </p>
+              <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1">
+                {chapters.map((chapter, idx) => {
+                  const nextSec =
+                    idx + 1 < chapters.length
+                      ? Math.min(chapters[idx + 1].startSec, chapter.startSec + 18)
+                      : Math.min(sourceDurationSec, chapter.startSec + 15);
+                  return (
+                    <div
+                      key={idx}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs"
                     >
-                      +클립 추가
-                    </button>
-                  )}
-                </div>
-                <p className="mt-1.5 whitespace-pre-wrap text-on-surface">
-                  {comment.text}
-                </p>
+                      <p className="min-w-0 flex-1 truncate text-on-surface">
+                        <span className="me-1.5 font-semibold text-primary tabular-nums">
+                          {formatClock(chapter.startSec)}
+                        </span>
+                        {chapter.title}
+                      </p>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="text"
+                          size="sm"
+                          icon="play_arrow"
+                          onClick={() => onSeekSource(chapter.startSec)}
+                        >
+                          이동
+                        </Button>
+                        <Button
+                          variant="tonal"
+                          size="sm"
+                          icon="add"
+                          onClick={() => addSpanAsClip(chapter.startSec, nextSec)}
+                        >
+                          클립 추가
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* High-retention peaks */}
+          <div className="space-y-2 rounded-2xl bg-surface p-4">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+              <Icon name="insights" size={16} className="text-primary" />
+              많이 본 구간 ({retentionPeaks.length})
+            </p>
+            {retentionPeaks.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">없음</p>
+            ) : (
+              <div className="space-y-2">
+                {retentionPeaks.map((peak, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary-container/60 p-3 text-xs text-on-secondary-container"
+                  >
+                    <p className="min-w-0 flex-1 font-semibold tabular-nums">
+                      {formatClock(peak.startSec)} – {formatClock(peak.endSec)} ·
+                      유지율 {Math.round(peak.watchRatio * 100)}%
+                    </p>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="text"
+                        size="sm"
+                        icon="play_arrow"
+                        onClick={() => onSeekSource(peak.startSec)}
+                      >
+                        미리보기
+                      </Button>
+                      <Button
+                        variant="tonal"
+                        size="sm"
+                        icon="add"
+                        onClick={() => addSpanAsClip(peak.startSec, peak.endSec)}
+                      >
+                        클립 추가
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Viewer comments */}
+          <div className="space-y-2 rounded-2xl bg-surface p-4">
+            <p className="text-xs font-semibold text-on-surface">
+              댓글 ({comments.length})
+            </p>
+            {comments.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">없음</p>
+            ) : (
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {comments.map((comment) => (
+                  <div
+                    key={comment.commentId}
+                    className="rounded-xl bg-surface-container-low p-3 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-on-surface-variant">
+                        <span className="font-semibold text-on-surface">
+                          {comment.author}
+                        </span>
+                        {comment.likeCount > 0 && (
+                          <span>👍 {comment.likeCount.toLocaleString()}</span>
+                        )}
+                        {comment.timestampSec !== null && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              comment.timestampSec !== null &&
+                              onSeekSource(comment.timestampSec)
+                            }
+                            className="inline-flex items-center gap-0.5 rounded-full bg-secondary-container px-2 py-0.5 font-medium text-on-secondary-container tabular-nums hover:ring-1 hover:ring-primary"
+                          >
+                            <Icon name="play_arrow" size={12} />
+                            {formatClock(comment.timestampSec)}
+                          </button>
+                        )}
+                      </div>
+                      {comment.timestampSec !== null && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            comment.timestampSec !== null &&
+                            addSpanAsClip(
+                              comment.timestampSec - 2,
+                              comment.timestampSec + 12,
+                            )
+                          }
+                          className="rounded-lg bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/25"
+                        >
+                          +클립 추가
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-1.5 whitespace-pre-wrap text-on-surface">
+                      {comment.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -759,7 +781,7 @@ export function EditorScreen(props: {
   };
 
   const requestFocus = (target: FocusTarget) => {
-    setTab(tabOf(target));
+    setTab(target.kind === 'caption' ? 'captions' : 'style');
     setFocus((current) => ({seq: (current?.seq ?? 0) + 1, target}));
   };
   // A click on the stage edits the Clip on screen, so select it first.
@@ -976,7 +998,6 @@ export function EditorScreen(props: {
                 sourceDurationSec={state.sourceDurationSec}
                 retentionPoints={result.retentionPoints}
                 retentionPeaks={result.retentionPeaks}
-                retentionLows={result.retentionLows}
                 subcutsFor={subcutsFor}
                 assets={assets}
                 edited={edited}
@@ -1054,8 +1075,8 @@ export function EditorScreen(props: {
                       clipIndex={state.clipIndex}
                       retentionPoints={result.retentionPoints}
                       retentionPeaks={result.retentionPeaks}
-                      retentionLows={result.retentionLows}
                       comments={result.youtubeComments}
+                      chapters={result.chapters}
                       onSeekSource={handleSeekSource}
                       dispatch={dispatch}
                     />
@@ -1082,6 +1103,24 @@ export function EditorScreen(props: {
           quality={renderQuality}
           job={jobs[scenario.scenarioId]}
           fontWarning={config.fontWarning}
+          recommendedThumbSec={
+            resolved
+              ? sourceToOutputSec(
+                  scenario.thumbnailSec ??
+                    scenario.clips.find(
+                      (c) => (c.mediaKind ?? 'source') === 'source',
+                    )?.startSec ??
+                    0,
+                  resolved.segments,
+                )
+              : 0.5
+          }
+          youtubeVideoId={result.youtubeVideoId}
+          firstClipStartSec={
+            scenario.clips.find((c) => (c.mediaKind ?? 'source') === 'source')
+              ?.startSec
+          }
+          assets={assets}
           onQualityChange={setRenderQuality}
           onRender={render}
           onClose={() => setExportOpen(false)}

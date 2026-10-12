@@ -10,7 +10,6 @@ import dataclasses
 import functools
 import os
 import pathlib
-import shutil
 import tempfile
 
 import dotenv
@@ -31,7 +30,6 @@ DEFAULT_MODEL_CHAIN = (
 # Vertex AI location used when GOOGLE_CLOUD_LOCATION is unset. The newest
 # Gemini models are served from the global endpoint.
 DEFAULT_VERTEX_LOCATION = 'global'
-_TRUE_VALUES = frozenset({'1', 'true', 'yes', 'on'})
 
 # Editor defaults sent to the UI. The first five are user adjustable.
 COMPOSITION = models.CompositionSettings(
@@ -146,15 +144,6 @@ def _env_list(name: str) -> tuple[str, ...]:
   return tuple(item.strip() for item in raw.split(',') if item.strip())
 
 
-def _env_flag(name: str) -> bool:
-  return os.environ.get(name, '').strip().lower() in _TRUE_VALUES
-
-
-def _gemini_backend() -> models.GeminiBackend:
-  # The google-genai SDK's own switch, so an existing .env keeps its meaning.
-  return 'vertex' if _env_flag('GOOGLE_GENAI_USE_VERTEXAI') else 'ai_studio'
-
-
 def _gemini_setup_error(
     backend: models.GeminiBackend, api_key: str, project: str
 ) -> str:
@@ -233,7 +222,9 @@ def default_look_style() -> models.LookStyle:
 @functools.cache
 def get_settings() -> Settings:
   """Returns the process settings, resolved once."""
-  backend = _gemini_backend()
+  # The google-genai SDK's own switch, so an existing .env keeps its meaning.
+  flag = _env_str('GOOGLE_GENAI_USE_VERTEXAI', '').lower()
+  backend = 'vertex' if flag in ('1', 'true', 'yes', 'on') else 'ai_studio'
   api_key = os.environ.get('GEMINI_API_KEY', '').strip()
   project = os.environ.get('GOOGLE_CLOUD_PROJECT', '').strip()
   oauth_client_id = _env_str('GOOGLE_OAUTH_CLIENT_ID', '')
@@ -259,8 +250,8 @@ def get_settings() -> Settings:
       ),
       retention_hours=_env_float('STUDIO_RETENTION_HOURS', 24.0),
       gcs_bucket=_env_str('STUDIO_GCS_BUCKET', ''),
-      ffmpeg_bin=_env_str('FFMPEG_BIN', shutil.which('ffmpeg') or 'ffmpeg'),
-      ffprobe_bin=_env_str('FFPROBE_BIN', shutil.which('ffprobe') or 'ffprobe'),
+      ffmpeg_bin=_env_str('FFMPEG_BIN', 'ffmpeg'),
+      ffprobe_bin=_env_str('FFPROBE_BIN', 'ffprobe'),
       subprocess_timeout_sec=_env_float('STUDIO_SUBPROCESS_TIMEOUT_SEC', 900.0),
       silence_noise_db=_env_float('STUDIO_SILENCE_NOISE_DB', -35.0),
       silence_min_sec=_env_float('STUDIO_SILENCE_MIN_SEC', 0.1),

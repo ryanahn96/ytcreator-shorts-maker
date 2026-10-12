@@ -206,7 +206,7 @@ def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
   return num
 
 
-def _clamp(value: float, low: float, high: float) -> float:
+def clamp(value: float, low: float, high: float) -> float:
   return min(max(value, low), high)
 
 
@@ -511,22 +511,19 @@ async def run_gemini(
 # --------------------------------------------------------------------------
 
 
-def _crop(raw: Any) -> models.CropRegion:
-  data = as_dict(raw)
+def _framing(raw: Any) -> models.FramingLayout:
+  """Reads a framing; a missing one (fast re-analysis) shows the full frame."""
+  data = as_dict(as_dict(raw).get('crop'))
   center_x = as_float(data.get('centerX'))
   center_y = as_float(data.get('centerY'))
   # Keep initial scenario zoom at 1.0 so the source frame is never degraded
   # by automatic digital zoom; center_x/center_y still guide aspect crops.
-  return models.CropRegion(
-      center_x=_clamp(0.5 if center_x is None else center_x, 0.0, 1.0),
-      center_y=_clamp(0.5 if center_y is None else center_y, 0.0, 1.0),
+  crop = models.CropRegion(
+      center_x=clamp(0.5 if center_x is None else center_x, 0.0, 1.0),
+      center_y=clamp(0.5 if center_y is None else center_y, 0.0, 1.0),
       zoom=1.0,
   )
-
-
-def _framing(raw: Any) -> models.FramingLayout:
-  """Reads a framing; a missing one (fast re-analysis) shows the full frame."""
-  return models.FramingLayout(crop=_crop(as_dict(raw).get('crop')))
+  return models.FramingLayout(crop=crop)
 
 
 def _headline(raw: Any) -> models.Headline:
@@ -538,12 +535,8 @@ def _headline(raw: Any) -> models.Headline:
 def _clip_time(
     raw_clip: dict[str, Any], duration_sec: float, *keys: str
 ) -> float | None:
-  for key in keys:
-    if key in raw_clip and raw_clip[key] is not None:
-      val = _parse_seconds(raw_clip[key], duration_sec)
-      if val is not None:
-        return val
-  return None
+  seconds = (_parse_seconds(raw_clip.get(key), duration_sec) for key in keys)
+  return next((value for value in seconds if value is not None), None)
 
 
 def _seconds_range(
@@ -608,6 +601,30 @@ def _transcript_from_answer(data: dict[str, Any]) -> ingestion.Transcript:
   return ingestion.transcript_from_lines(kept)
 
 
+def _resolve_thumbnail_sec(
+    scenario: dict[str, Any],
+    clips: list[models.Clip],
+    duration_sec: float,
+) -> float:
+  """Resolves a Scenario's recommended thumbnailSec inside its Clips."""
+  raw_sec = _clip_time(
+      scenario, duration_sec, 'thumbnailSec', 'thumbnail_sec', 'thumbnail'
+  )
+  if raw_sec is None:
+    upper = max(clips[0].start_sec, clips[0].end_sec - 0.05)
+    return round(min(upper, clips[0].start_sec + 0.5), 3)
+  for clip in clips:
+    if clip.start_sec <= raw_sec <= clip.end_sec:
+      upper = max(clip.start_sec, clip.end_sec - 0.05)
+      return round(min(raw_sec, upper), 3)
+  nearest = min(
+      clips,
+      key=lambda c: min(abs(raw_sec - c.start_sec), abs(raw_sec - c.end_sec)),
+  )
+  upper = max(nearest.start_sec, nearest.end_sec - 0.05)
+  return round(clamp(raw_sec, nearest.start_sec, upper), 3)
+
+
 def _build_scenarios(
     data: dict[str, Any], duration_sec: float, warnings: list[str]
 ) -> list[models.Scenario]:
@@ -645,6 +662,7 @@ def _build_scenarios(
             scenario_id=f's{s_number}',
             title=clean_text(scenario.get('title')) or label,
             rationale=clean_text(scenario.get('rationale')),
+            thumbnail_sec=_resolve_thumbnail_sec(scenario, clips, duration_sec),
             look=models.Look(
                 headline=_headline(scenario.get('headline')),
                 framing_layout=_framing(scenario.get('framingLayout')),
@@ -701,19 +719,51 @@ async def _resolve_youtube_context(
     workspace: storage.Workspace,
     warnings: list[str],
     emit: Emit,
+    include_shorts: bool = True,
 ) -> models.YouTubeVideoContext | None:
   """Loads or fetches the linked YouTube video context."""
   stored = await asyncio.to_thread(workspace.load_youtube_context, source_id)
   video_id = request.youtube_video_id.strip()
   if not video_id:
-    return stored
+    if not include_shorts:
+      return None
+    if stored is not None:
+      if not stored.video_id:
+        return stored
+      unlinked = models.YouTubeVideoContext(
+          video_id='', channel_shorts=stored.channel_shorts
+      )
+      await asyncio.to_thread(
+          workspace.save_youtube_context, source_id, unlinked
+      )
+      return unlinked if unlinked.channel_shorts else None
+    if not access_token:
+      return None
+    shorts = await asyncio.to_thread(
+        video_context.fetch_channel_shorts_stats, access_token
+    )
+    if not shorts:
+      return None
+    context = models.YouTubeVideoContext(video_id='', channel_shorts=shorts)
+    await asyncio.to_thread(workspace.save_youtube_context, source_id, context)
+    return context
   if stored is not None and stored.video_id == video_id:
-    return stored
+    return (
+        stored
+        if include_shorts
+        else stored.model_copy(update={'channel_shorts': []})
+    )
   if not access_token:
     warnings.append(
         'YouTube 로그인이 없어 선택한 채널 영상 데이터를 불러오지 못했습니다.'
     )
-    return stored
+    if stored is None:
+      return None
+    return (
+        stored
+        if include_shorts
+        else stored.model_copy(update={'channel_shorts': []})
+    )
   await emit(progress('youtube'))
   try:
     context = await asyncio.to_thread(
@@ -722,10 +772,20 @@ async def _resolve_youtube_context(
     await asyncio.to_thread(
         workspace.save_youtube_context, source_id, context
     )
-    return context
+    return (
+        context
+        if include_shorts
+        else context.model_copy(update={'channel_shorts': []})
+    )
   except youtube_common.YouTubeError as exc:
     warnings.append(f'YouTube 데이터를 불러오지 못해 영상만으로 진행합니다: {exc}')
-    return stored
+    if stored is None:
+      return None
+    return (
+        stored
+        if include_shorts
+        else stored.model_copy(update={'channel_shorts': []})
+    )
 
 
 async def _transcribe_with_speech(
@@ -863,6 +923,7 @@ async def analyze(
           workspace,
           warnings,
           emit,
+          include_shorts=not has_ever_analyzed,
       ),
       _prepare_video(upload, workspace, emit) if needs_video else _no_video(),
   )
@@ -952,6 +1013,7 @@ async def analyze(
           list(yt_context.retention_points) if yt_context else []
       ),
       retention_peaks=list(yt_context.retention_peaks) if yt_context else [],
-      retention_lows=list(yt_context.retention_lows) if yt_context else [],
       youtube_comments=list(yt_context.comments) if yt_context else [],
+      chapters=list(yt_context.chapters) if yt_context else [],
   )
+

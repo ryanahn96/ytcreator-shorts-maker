@@ -11,6 +11,7 @@ this one swallows every error and always exits 0.
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import shlex
@@ -77,15 +78,11 @@ def reasons(command: str, depth: int = 0) -> list[str]:
   """Returns why `command` needs the user's OK, looking into `sh -c` scripts."""
   words = _words(command)
   found = []
-  segment: list[str] = []
-  for word in [*words, ';']:
-    if not _OPERATOR.fullmatch(word):
-      segment.append(word)
-      continue
-    for subcommand, args in _git_calls(segment):
-      if reason := _reason(subcommand, args):
-        found.append(reason)
-    segment = []
+  for op, segment in itertools.groupby(words, _OPERATOR.fullmatch):
+    if op is None:
+      for subcommand, args in _git_calls(list(segment)):
+        if reason := _reason(subcommand, args):
+          found.append(reason)
   if depth < 2:
     for word in words:
       if ' ' in word and 'git' in word:

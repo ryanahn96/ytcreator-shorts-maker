@@ -196,7 +196,9 @@ class Checker:
     """
     if start > end:
       start, end = end, start
-    fitted = (values.clamp(start, 0.0, limit), values.clamp(end, 0.0, limit))
+    fitted = (
+        director.clamp(start, 0.0, limit), director.clamp(end, 0.0, limit)
+    )
     if fitted[1] - fitted[0] < self._min_sec:
       self._skip(data, '구간이 너무 짧아서')
       return None
@@ -303,7 +305,7 @@ class Checker:
   def _image_length(self, seconds: float) -> float:
     """Fits how long an image Clip shows into the allowed range."""
     low, high = _IMAGE_CLIP_SEC
-    length = values.clamp(seconds, low, high)
+    length = director.clamp(seconds, low, high)
     if abs(length - seconds) > 1e-6:
       self.note(f'이미지 클립은 {low:g}~{high:g}초라 {length:g}초로 맞췄어요.')
     return length
@@ -373,7 +375,7 @@ class Checker:
       if at is None:
         self._skip(data, '맞출 단어나 시간이 없어서')
         return None
-    at = values.clamp(at, 0.0, self._limit(clip))
+    at = director.clamp(at, 0.0, self._limit(clip))
     if clip.media_kind == 'source':
       self._allow_edge(clip, edge, at)
     return {
@@ -403,7 +405,7 @@ class Checker:
       return self._image_duration(number, length)
     if clip.media_kind == 'source':
       at = (clip.start_sec if edge == 'start' else clip.end_sec) + delta
-      self._allow_edge(clip, edge, values.clamp(at, 0.0, self._limit(clip)))
+      self._allow_edge(clip, edge, director.clamp(at, 0.0, self._limit(clip)))
     return {
         'op': 'moveClipEdge',
         'clip': number,
@@ -423,7 +425,7 @@ class Checker:
     if clip.media_kind == 'source':
       length = clip.end_sec - clip.start_sec
       limit = self._limit(clip)
-      start = values.clamp(
+      start = director.clamp(
           clip.start_sec + delta, 0.0, max(0.0, limit - length)
       )
       self._allow(start, min(limit, start + length))
@@ -656,7 +658,7 @@ class Checker:
   def _image_width(self, value: float) -> float:
     """Fits an image width into the allowed range, with a note if it moved."""
     high = self._canvas.canvas_width * _MAX_IMAGE_WIDTH_RATIO
-    width = values.clamp(value, _MIN_IMAGE_WIDTH, high)
+    width = director.clamp(value, _MIN_IMAGE_WIDTH, high)
     if abs(width - value) > 1e-6:
       self.note(
           f'이미지 너비는 {_MIN_IMAGE_WIDTH:g}~{high:g}라 {width:g}에 맞췄어요.'
@@ -841,7 +843,7 @@ class Checker:
       self._skip(data, '글자 수가 없어서')
       return None
     low, high = _CAPTION_MAX_CHARS
-    count = int(values.clamp(values.half_up(value), low, high))
+    count = int(director.clamp(values.half_up(value), low, high))
     if count != values.half_up(value):
       self.note(f'자막 줄 글자 수는 {low}~{high}자라 {count}자로 맞췄어요.')
     return {'op': 'setCaptionMaxChars', 'maxChars': count}
@@ -889,7 +891,7 @@ class Checker:
     if value is None:
       self._skip(data, '볼륨 값이 없어서')
       return None
-    volume = values.clamp(value, 0.0, models.MAX_MUSIC_VOLUME)
+    volume = director.clamp(value, 0.0, models.MAX_MUSIC_VOLUME)
     if abs(volume - value) > 1e-6:
       self.note(f'음악 볼륨은 0~100%라 {values.half_up(volume * 100)}%로 맞췄어요.')
     return round(volume, 3)

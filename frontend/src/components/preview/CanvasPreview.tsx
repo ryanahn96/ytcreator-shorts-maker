@@ -6,7 +6,7 @@
 
 import {useEffect, useRef, type ReactNode} from 'react';
 
-import {drawFrame, type Size} from '../../lib/framing';
+import {drawFrame} from '../../lib/framing';
 import type {OutputSegment} from '../../lib/timeline';
 import type {FramingLayout, LookStyle, TemplateStyle} from '../../types';
 
@@ -17,7 +17,6 @@ export function CanvasPreview(props: {
   framing: FramingLayout;
   lookStyle: LookStyle;
   style: TemplateStyle;
-  output: Size;
   /** Receives the Source Video <video>. */
   onVideo: (video: HTMLVideoElement | null) => void;
   /** Receives the external B-roll <video>. */
@@ -32,7 +31,6 @@ export function CanvasPreview(props: {
     framing,
     lookStyle,
     style,
-    output,
     onVideo,
     onExtVideo,
   } = props;
@@ -50,7 +48,9 @@ export function CanvasPreview(props: {
     };
   }, [onVideo, onExtVideo, videoUrl]);
 
-  const {width, height} = output;
+  // Half the render size keeps drawing cheap; the frame scales it anyway.
+  const width = style.canvasWidth / 2;
+  const height = style.canvasHeight / 2;
   const mediaKind = activeSegment?.mediaKind ?? 'source';
   const assetId = activeSegment?.assetId ?? null;
   const assetUrl = assetId ? (assetUrls.get(assetId) ?? '') : '';
@@ -108,7 +108,7 @@ export function CanvasPreview(props: {
     // handles and placeholders use the dark theme colors.
     <div
       data-theme="dark"
-      className="studio-frame relative mx-auto overflow-hidden rounded-2xl"
+      className="studio-frame relative mx-auto w-full overflow-hidden rounded-2xl"
       style={{aspectRatio: `${width} / ${height}`, background: lookStyle.backgroundColor}}
     >
       <canvas ref={canvasRef} width={width} height={height} className="absolute inset-0 h-full w-full" />

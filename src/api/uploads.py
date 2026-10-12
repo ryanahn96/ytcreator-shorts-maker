@@ -50,17 +50,13 @@ async def upload_source_init(
   except storage.StorageError as exc:
     return deps.error(f'업로드 세션을 시작하지 못했습니다: {exc}', 500)
   if session is None:
-    return responses.JSONResponse(
-        models.UploadInitResponse(mode='direct').to_json()
+    init = models.UploadInitResponse(mode='direct')
+  else:
+    source_id, upload_url = session
+    init = models.UploadInitResponse(
+        mode='gcs', source_id=source_id, upload_url=upload_url
     )
-  source_id, upload_url = session
-  return responses.JSONResponse(
-      models.UploadInitResponse(
-          mode='gcs',
-          source_id=source_id,
-          upload_url=upload_url,
-      ).to_json()
-  )
+  return responses.JSONResponse(init.to_json())
 
 
 @router.post('/upload-source/complete')

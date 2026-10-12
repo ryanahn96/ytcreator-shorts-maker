@@ -17,13 +17,11 @@ _MAX_HEADLINE_LINES = 10
 _MIN_VIDEO_BOX = 120.0
 
 
-_GROUP_LABELS = {
+_LABELS = {
     'headline': '헤드라인',
     'caption': '자막',
     'box': '영상 박스',
     'crop': '영상',
-}
-_LEAF_LABELS = {
     'size': '글자 크기',
     'outlineWidth': '외곽선 두께',
     'backgroundOpacity': '글 배경 불투명도',
@@ -54,8 +52,7 @@ _PLACEMENT_RANGES = {'x': (-math.inf, math.inf), 'y': (-math.inf, math.inf)}
 
 
 def _label(path: tuple[str, ...]) -> str:
-  groups = [_GROUP_LABELS[part] for part in path[:-1] if part in _GROUP_LABELS]
-  return ' '.join([*groups, _LEAF_LABELS.get(path[-1], path[-1])])
+  return ' '.join(_LABELS[part] for part in path)
 
 
 class LookPatcher:
@@ -136,7 +133,7 @@ class LookPatcher:
       self, path: tuple[str, ...], value: float, low: float, high: float
   ) -> float:
     """Returns `value` moved into low..high, noting it if it moved."""
-    bounded = values.clamp(value, low, high)
+    bounded = director.clamp(value, low, high)
     if bounded != value:
       self._note(
           f'{_label(path)} 값은 허용 범위 밖이라 {bounded:g}에 맞췄어요.'

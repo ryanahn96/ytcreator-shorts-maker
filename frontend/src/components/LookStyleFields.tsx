@@ -192,26 +192,16 @@ export function LookStyleFields(props: {
 }) {
   const {value, defaults, onChange} = props;
   const boxed = props.fit === 'box';
-  const canvas = {
-    backgroundColor: value.backgroundColor,
-    border: value.border,
-    borderColor: value.borderColor,
-    borderWidth: value.borderWidth,
-  };
-  const canvasDefaults = {
-    backgroundColor: defaults.backgroundColor,
-    border: defaults.border,
-    borderColor: defaults.borderColor,
-    borderWidth: defaults.borderWidth,
-  };
+  const canvasOf = ({backgroundColor, border, borderColor, borderWidth}: LookStyle) =>
+    ({backgroundColor, border, borderColor, borderWidth});
   const setHeadline = (headline: HeadlineStyle) => onChange({...value, headline});
   const setCaption = (caption: TextStyle) => onChange({...value, caption});
   return (
     <>
       <StyleSection
         title="배경·테두리"
-        changed={!sameJson(canvas, canvasDefaults)}
-        onReset={() => onChange({...value, ...canvasDefaults})}
+        changed={!sameJson(canvasOf(value), canvasOf(defaults))}
+        onReset={() => onChange({...value, ...canvasOf(defaults)})}
       >
         <ColorField
           label="배경색"

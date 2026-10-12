@@ -20,7 +20,7 @@ import {
 
 import {clipEdgeRange, type EditorAction} from '../lib/editor';
 import type {FocusRequest} from '../lib/focus';
-import {formatClock, formatSeconds} from '../lib/format';
+import {formatClock} from '../lib/format';
 import {effectiveLook, lookTarget} from '../lib/look';
 import type {ResolvedClip, Transcript, TranscriptEdits} from '../lib/timeline';
 import type {
@@ -396,29 +396,19 @@ export function TranscriptPanel(props: {
   // Identify the word and line currently under the live preview playhead.
   const {playingWordIndex, playingLineIndex} = useMemo(() => {
     const sourceSec = playbackState?.sourceSec ?? null;
-    if (sourceSec === null || lines.length === 0) {
+    const line =
+      sourceSec === null
+        ? undefined
+        : lines.find((l) => sourceSec >= l.startSec - 0.08 && sourceSec <= l.endSec + 0.15);
+    if (sourceSec === null || !line) {
       return {playingWordIndex: null, playingLineIndex: null};
     }
-    let matchedLineIdx: number | null = null;
-    let matchedWordIdx: number | null = null;
-    for (const line of lines) {
-      if (sourceSec >= line.startSec - 0.08 && sourceSec <= line.endSec + 0.15) {
-        matchedLineIdx = line.index;
-        const exactWord = line.words.find(
-          (w) => !w.isSoundTag && sourceSec >= w.startSec - 0.04 && sourceSec <= w.endSec + 0.06,
-        );
-        if (exactWord) {
-          matchedWordIdx = exactWord.index;
-        } else {
-          const prevWord = line.words
-            .filter((w) => !w.isSoundTag && w.startSec <= sourceSec)
-            .at(-1);
-          matchedWordIdx = (prevWord ?? line.words[0])?.index ?? null;
-        }
-        break;
-      }
-    }
-    return {playingWordIndex: matchedWordIdx, playingLineIndex: matchedLineIdx};
+    const spoken = line.words.filter((w) => !w.isSoundTag);
+    const word =
+      spoken.find((w) => sourceSec >= w.startSec - 0.04 && sourceSec <= w.endSec + 0.06) ??
+      spoken.filter((w) => w.startSec <= sourceSec).at(-1) ??
+      line.words[0];
+    return {playingWordIndex: word.index, playingLineIndex: line.index};
   }, [playbackState?.sourceSec, lines]);
 
   const scrollToPlayingLine = () => {
@@ -466,8 +456,6 @@ export function TranscriptPanel(props: {
       }),
     });
   };
-  const applyClipStart = (startSec: number) => applyClipEdge('start', startSec);
-  const applyClipEnd = (endSec: number) => applyClipEdge('end', endSec);
 
   const applySplitAt = (atSec: number) => {
     const min = props.minSubcutSec;
@@ -481,9 +469,7 @@ export function TranscriptPanel(props: {
       dispatch({type: 'splitClip', index: clipIndex, atSec});
     } else {
       setNotice(
-        `고른 클립 안쪽의 단어를 골라 주세요. 나눈 두 조각이 각각 ${formatSeconds(
-          min,
-        )} 이상이어야 해요.`,
+        `고른 클립 안쪽의 단어를 골라 주세요. 나눈 두 조각이 각각 ${min.toFixed(1)}초 이상이어야 해요.`,
       );
     }
   };
@@ -523,23 +509,14 @@ export function TranscriptPanel(props: {
 
   const filteredLines = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return lines.filter((line) => {
-      if (filterScope === 'clip') {
-        const inSelected = line.words.some((w) => tones.get(w.index) === 'selected');
-        if (!inSelected) {
-          return false;
-        }
-      }
-      if (q) {
-        return line.words.some((w) => {
-          const shown = edits.wordText.get(w.index) ?? w.text;
-          return (
-            shown.toLowerCase().includes(q) || w.text.toLowerCase().includes(q)
-          );
-        });
-      }
-      return true;
-    });
+    const matches = (w: TranscriptWord) =>
+      (edits.wordText.get(w.index) ?? w.text).toLowerCase().includes(q) ||
+      w.text.toLowerCase().includes(q);
+    return lines.filter(
+      (line) =>
+        (filterScope === 'all' || line.words.some((w) => tones.get(w.index) === 'selected')) &&
+        (!q || line.words.some(matches)),
+    );
   }, [lines, filterScope, query, tones, edits.wordText]);
 
   const startLineEdit = (line: Line) => {
@@ -787,7 +764,7 @@ export function TranscriptPanel(props: {
                         <>
                           <button
                             type="button"
-                            onClick={() => applyClipStart(firstWord.startSec)}
+                            onClick={() => applyClipEdge('start', firstWord.startSec)}
                             title="이 줄부터 클립 시작"
                             className="rounded px-1.5 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
                           >
@@ -795,7 +772,7 @@ export function TranscriptPanel(props: {
                           </button>
                           <button
                             type="button"
-                            onClick={() => applyClipEnd(lastWord.endSec)}
+                            onClick={() => applyClipEdge('end', lastWord.endSec)}
                             title="이 줄까지 클립 끝"
                             className="rounded px-1.5 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
                           >
@@ -840,8 +817,8 @@ export function TranscriptPanel(props: {
                     onToggleCut={() =>
                       dispatch({type: 'toggleCutWord', index: activeWordInLine.index})
                     }
-                    onSetStart={() => applyClipStart(activeWordInLine.startSec)}
-                    onSetEnd={() => applyClipEnd(activeWordInLine.endSec)}
+                    onSetStart={() => applyClipEdge('start', activeWordInLine.startSec)}
+                    onSetEnd={() => applyClipEdge('end', activeWordInLine.endSec)}
                     onSplit={() => applySplitAt(activeWordInLine.startSec)}
                     onClose={() => setActiveWordIndex(null)}
                   />

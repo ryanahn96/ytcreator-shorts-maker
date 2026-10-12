@@ -49,11 +49,10 @@ function keyDelta(event: KeyboardEvent, step: number): number {
 function RetentionOverlay(props: {
   points: readonly YouTubeRetentionPoint[];
   peaks?: readonly YouTubeRetentionPeak[];
-  lows?: readonly YouTubeRetentionPeak[];
   bounds: TimeRange;
   sourceDurationSec: number;
 }) {
-  const {points, peaks = [], lows = [], bounds, sourceDurationSec} = props;
+  const {points, peaks = [], bounds, sourceDurationSec} = props;
   if (points.length < 2 || sourceDurationSec <= 0) {
     return null;
   }
@@ -73,10 +72,7 @@ function RetentionOverlay(props: {
       aria-hidden
       className="pointer-events-none absolute inset-0 h-full w-full overflow-hidden rounded-xl"
     >
-      {[
-        ...peaks.map((band) => ({band, fill: 'fill-primary/15'})),
-        ...lows.map((band) => ({band, fill: 'fill-error/15'})),
-      ].map(({band, fill}, idx) => {
+      {peaks.map((band, idx) => {
         const x1 = clamp(((band.startSec - bounds.startSec) / span) * 100, 0, 100);
         const x2 = clamp(((band.endSec - bounds.startSec) / span) * 100, 0, 100);
         if (x2 <= x1) {
@@ -89,7 +85,7 @@ function RetentionOverlay(props: {
             y={0}
             width={x2 - x1}
             height={44}
-            className={fill}
+            className="fill-primary/15"
           />
         );
       })}
@@ -146,7 +142,6 @@ export function RangeSlider(props: {
   /** Optional YouTube Audience Retention points (0..1) to overlay on the track. */
   retentionPoints?: readonly YouTubeRetentionPoint[];
   retentionPeaks?: readonly YouTubeRetentionPeak[];
-  retentionLows?: readonly YouTubeRetentionPeak[];
   sourceDurationSec?: number;
   /** A drag in progress, or null when it ends without a commit. */
   onDraft: (range: TimeRange | null) => void;
@@ -285,7 +280,6 @@ export function RangeSlider(props: {
           <RetentionOverlay
             points={props.retentionPoints}
             peaks={props.retentionPeaks}
-            lows={props.retentionLows}
             bounds={bounds}
             sourceDurationSec={props.sourceDurationSec}
           />

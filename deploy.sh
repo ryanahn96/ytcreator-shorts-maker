@@ -31,74 +31,26 @@ cd "$(dirname "$0")"
 
 # Read a single KEY from .env (stripping comments and quotes)
 read_env() {
-  local key="$1"
-  if [[ -f .env ]]; then
-    grep -E "^${key}=" .env 2>/dev/null | tail -n 1 | cut -d'=' -f2- | tr -d '\r\n'\''"' || true
-  fi
+  grep -E "^$1=" .env 2>/dev/null | tail -n 1 | cut -d'=' -f2- | tr -d '\r\n'\''"' || true
 }
 
 # Read deployment settings from environment or .env (no hardcoded defaults)
-if [[ -z "${PROJECT_ID:-}" ]]; then
-  PROJECT_ID="$(read_env PROJECT_ID)"
-  if [[ -z "${PROJECT_ID}" ]]; then
-    PROJECT_ID="$(read_env GOOGLE_CLOUD_PROJECT)"
-  fi
-fi
-
-if [[ -z "${REGION:-}" ]]; then
-  REGION="$(read_env REGION)"
-fi
-
-if [[ -z "${SERVICE:-}" ]]; then
-  SERVICE="$(read_env SERVICE)"
-  if [[ -z "${SERVICE}" ]]; then
-    SERVICE="$(read_env SERVICE_NAME)"
-  fi
-fi
-
-if [[ -z "${REPOSITORY:-}" ]]; then
-  REPOSITORY="$(read_env REPOSITORY)"
-  if [[ -z "${REPOSITORY}" ]]; then
-    REPOSITORY="$(read_env REPOSITORY_ID)"
-  fi
-fi
-
-if [[ -z "${GOOGLE_OAUTH_CLIENT_ID:-}" && -z "${TF_VAR_oauth_client_id:-}" ]]; then
-  GOOGLE_OAUTH_CLIENT_ID="$(read_env GOOGLE_OAUTH_CLIENT_ID)"
-fi
-
-if [[ -z "${GOOGLE_OAUTH_CLIENT_SECRET:-}" && -z "${TF_VAR_oauth_client_secret:-}" ]]; then
-  GOOGLE_OAUTH_CLIENT_SECRET="$(read_env GOOGLE_OAUTH_CLIENT_SECRET)"
-fi
-
-if [[ -z "${TF_VAR_oauth_client_id:-}" && -n "${GOOGLE_OAUTH_CLIENT_ID:-}" ]]; then
-  export TF_VAR_oauth_client_id="${GOOGLE_OAUTH_CLIENT_ID}"
-fi
-if [[ -z "${TF_VAR_oauth_client_secret:-}" && -n "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]]; then
-  export TF_VAR_oauth_client_secret="${GOOGLE_OAUTH_CLIENT_SECRET}"
-fi
+PROJECT_ID="${PROJECT_ID:-$(read_env PROJECT_ID)}"
+PROJECT_ID="${PROJECT_ID:-$(read_env GOOGLE_CLOUD_PROJECT)}"
+REGION="${REGION:-$(read_env REGION)}"
+SERVICE="${SERVICE:-$(read_env SERVICE)}"
+SERVICE="${SERVICE:-$(read_env SERVICE_NAME)}"
+REPOSITORY="${REPOSITORY:-$(read_env REPOSITORY)}"
+REPOSITORY="${REPOSITORY:-$(read_env REPOSITORY_ID)}"
+export TF_VAR_oauth_client_id="${TF_VAR_oauth_client_id:-${GOOGLE_OAUTH_CLIENT_ID:-$(read_env GOOGLE_OAUTH_CLIENT_ID)}}"
+export TF_VAR_oauth_client_secret="${TF_VAR_oauth_client_secret:-${GOOGLE_OAUTH_CLIENT_SECRET:-$(read_env GOOGLE_OAUTH_CLIENT_SECRET)}}"
 
 # Optional infrastructure sizing from environment or .env
-if [[ -z "${TF_VAR_cpu:-}" ]]; then
-  ENV_CPU="$(read_env CPU)"
-  [[ -n "${ENV_CPU}" ]] && export TF_VAR_cpu="${ENV_CPU}"
-fi
-if [[ -z "${TF_VAR_memory:-}" ]]; then
-  ENV_MEMORY="$(read_env MEMORY)"
-  [[ -n "${ENV_MEMORY}" ]] && export TF_VAR_memory="${ENV_MEMORY}"
-fi
-if [[ -z "${TF_VAR_min_instances:-}" ]]; then
-  ENV_MIN="$(read_env MIN_INSTANCES)"
-  [[ -n "${ENV_MIN}" ]] && export TF_VAR_min_instances="${ENV_MIN}"
-fi
-if [[ -z "${TF_VAR_max_instances:-}" ]]; then
-  ENV_MAX="$(read_env MAX_INSTANCES)"
-  [[ -n "${ENV_MAX}" ]] && export TF_VAR_max_instances="${ENV_MAX}"
-fi
-if [[ -z "${TF_VAR_retention_days:-}" ]]; then
-  ENV_RETENTION="$(read_env RETENTION_DAYS)"
-  [[ -n "${ENV_RETENTION}" ]] && export TF_VAR_retention_days="${ENV_RETENTION}"
-fi
+for key in CPU MEMORY MIN_INSTANCES MAX_INSTANCES RETENTION_DAYS; do
+  var="TF_VAR_$(tr '[:upper:]' '[:lower:]' <<< "${key}")"
+  value="${!var:-$(read_env "${key}")}"
+  [[ -z "${value}" ]] || export "${var}=${value}"
+done
 
 # Validate required deployment variables (all must be set in .env or environment)
 MISSING_VARS=()
@@ -168,7 +120,6 @@ gcloud services enable --project="${PROJECT_ID}" \
   speech.googleapis.com \
   storage.googleapis.com \
   youtube.googleapis.com \
-  youtubereporting.googleapis.com \
   youtubeanalytics.googleapis.com \
   iam.googleapis.com \
   cloudresourcemanager.googleapis.com

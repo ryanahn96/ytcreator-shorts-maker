@@ -284,15 +284,11 @@ function VideoClipEditor(props: {
 
   const commit = (range: TimeRange) => {
     setDraft(null);
-    const startSec = Math.max(0, roundMs(range.startSec));
-    const endSec = Math.min(
-      maxDuration,
-      Math.max(startSec + settings.minSubcutSec, roundMs(range.endSec)),
-    );
+    const endSec = Math.min(maxDuration, roundMs(range.endSec));
     dispatch({
       type: 'setClipRange',
       index,
-      range: {startSec, endSec},
+      range: {startSec: roundMs(range.startSec), endSec},
     });
   };
 
@@ -354,7 +350,6 @@ function ClipRangeEditor(props: {
   sourceDurationSec: number;
   retentionPoints?: readonly YouTubeRetentionPoint[];
   retentionPeaks?: readonly YouTubeRetentionPeak[];
-  retentionLows?: readonly YouTubeRetentionPeak[];
   subcutsFor: (range: TimeRange) => TimeRange[];
   dispatch: Dispatch<EditorAction>;
 }) {
@@ -444,7 +439,6 @@ function ClipRangeEditor(props: {
         largeStepSec={steps.at(-1) ?? 0.5}
         retentionPoints={props.retentionPoints}
         retentionPeaks={props.retentionPeaks}
-        retentionLows={props.retentionLows}
         sourceDurationSec={props.sourceDurationSec}
         onDraft={setDraft}
         onCommit={commit}
@@ -511,11 +505,10 @@ function ClipItem(props: {
   position: number;
   selected: boolean;
   peak: YouTubeRetentionPeak | null;
-  low: YouTubeRetentionPeak | null;
   dispatch: Dispatch<EditorAction>;
   children?: ReactNode;
 }) {
-  const {resolved, position, selected, peak, low, dispatch} = props;
+  const {resolved, position, selected, peak, dispatch} = props;
   const {clip, planIndex, words} = resolved;
   const mediaKind = clip.mediaKind ?? 'source';
   const itemRef = useRef<HTMLLIElement>(null);
@@ -565,15 +558,6 @@ function ClipItem(props: {
               🔥 많이 본 구간 {Math.round(peak.watchRatio * 100)}%
             </span>
           )}
-          {!peak && low && (
-            <span
-              title={`${low.label} (${formatClock(low.startSec)} – ${formatClock(low.endSec)})`}
-              className="inline-flex items-center gap-1 rounded-full bg-error-container px-2 py-0.5 text-[11px] font-medium text-on-error-container"
-            >
-              <Icon name="warning" size={13} />
-              ⚠️ 적게 본 구간 {Math.round(low.watchRatio * 100)}%
-            </span>
-          )}
         </span>
         {mediaKind === 'source' && (
           <span className="line-clamp-2 block text-[13px] leading-5">
@@ -604,7 +588,6 @@ export function ClipEditor(props: {
   assets: AssetStore;
   retentionPoints?: readonly YouTubeRetentionPoint[];
   retentionPeaks?: readonly YouTubeRetentionPeak[];
-  retentionLows?: readonly YouTubeRetentionPeak[];
   subcutsFor: (range: TimeRange) => TimeRange[];
   /** Whether the Scenario differs from Gemini's proposal. */
   edited: boolean;
@@ -694,7 +677,6 @@ export function ClipEditor(props: {
                 position={position}
                 selected={position === clipIndex}
                 peak={matchingPeak(resolved.clip, props.retentionPeaks)}
-                low={matchingPeak(resolved.clip, props.retentionLows)}
                 dispatch={dispatch}
               >
                 {position === clipIndex &&
@@ -725,7 +707,6 @@ export function ClipEditor(props: {
                       sourceDurationSec={props.sourceDurationSec}
                       retentionPoints={props.retentionPoints}
                       retentionPeaks={props.retentionPeaks}
-                      retentionLows={props.retentionLows}
                       subcutsFor={props.subcutsFor}
                       dispatch={dispatch}
                     />
