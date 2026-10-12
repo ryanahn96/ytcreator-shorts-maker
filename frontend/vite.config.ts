@@ -79,6 +79,10 @@ export default defineConfig({
         timeout: 300000,
         proxyTimeout: 300000,
       },
+      '/guide': {
+        target: BACKEND_TARGET,
+        changeOrigin: true,
+      },
     },
   },
 });

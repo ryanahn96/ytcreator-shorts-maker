@@ -58,11 +58,26 @@ def validation_error(
   return deps.error(f'요청 형식이 올바르지 않습니다. {details}', 422)
 
 
+@app.get('/guide', response_model=None)
+@app.get('/guide/', response_model=None)
+@app.get('/api/guide', response_model=None)
+def guide() -> fastapi.Response:
+  """Serves the full hands-on guide HTML."""
+  guide_path = (deps.settings.docs_dir / 'fullguide.html').resolve()
+  if guide_path.is_file():
+    return responses.FileResponse(guide_path, media_type='text/html')
+  return deps.error('전체 가이드 파일을 찾을 수 없습니다.', 404)
+
+
 @app.get('/{path:path}', response_model=None)
 def frontend(path: str) -> fastapi.Response:
   """Serves the built frontend (frontend/dist) with an SPA fallback."""
   if path == 'api' or path.startswith('api/'):
     return deps.error('Not found', 404)
+  if path in ('guide', 'guide/', 'fullguide.html'):
+    guide_path = (deps.settings.docs_dir / 'fullguide.html').resolve()
+    if guide_path.is_file():
+      return responses.FileResponse(guide_path, media_type='text/html')
   dist = deps.settings.dist_dir.resolve()
   candidate = (dist / path).resolve()
   if path and candidate.is_file() and candidate.is_relative_to(dist):

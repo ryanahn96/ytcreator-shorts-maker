@@ -30,6 +30,7 @@ RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
     && uv pip install -r requirements.txt
 
 COPY src/ ./src/
+COPY docs/ ./docs/
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 ENV PATH="/app/.venv/bin:${PATH}"
