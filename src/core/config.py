@@ -123,6 +123,7 @@ class Settings:
   font_warning: str
   backend_port: int
   dist_dir: pathlib.Path
+  docs_dir: pathlib.Path
 
 
 def _env_str(name: str, default: str) -> str:
@@ -294,4 +295,5 @@ def get_settings() -> Settings:
       ),
       font_warning=_font_warning(),
       dist_dir=REPO_ROOT / 'frontend' / 'dist',
+      docs_dir=REPO_ROOT / 'docs',
   )
