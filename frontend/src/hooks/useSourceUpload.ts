@@ -25,36 +25,24 @@ function isSameFile(state: UploadState, objectUrl: string): boolean {
 }
 
 function probeLocalVideo(objectUrl: string): Promise<LocalVideoMetadata> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    let settled = false;
-    const finish = (meta: LocalVideoMetadata) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      video.removeAttribute('src');
-      video.load();
-      resolve(meta);
-    };
-    const timer = window.setTimeout(
-      () => finish({durationSec: 0, width: 0, height: 0}),
-      3000,
-    );
-    video.onloadedmetadata = () => {
-      window.clearTimeout(timer);
-      finish({
+  const video = document.createElement('video');
+  video.preload = 'metadata';
+  const none = {durationSec: 0, width: 0, height: 0};
+  let timer = 0;
+  return new Promise<LocalVideoMetadata>((resolve) => {
+    timer = window.setTimeout(() => resolve(none), 3000);
+    video.onloadedmetadata = () =>
+      resolve({
         durationSec: Number.isFinite(video.duration) ? video.duration : 0,
-        width: video.videoWidth || 0,
-        height: video.videoHeight || 0,
+        width: video.videoWidth,
+        height: video.videoHeight,
       });
-    };
-    video.onerror = () => {
-      window.clearTimeout(timer);
-      finish({durationSec: 0, width: 0, height: 0});
-    };
+    video.onerror = () => resolve(none);
     video.src = objectUrl;
+  }).finally(() => {
+    window.clearTimeout(timer);
+    video.removeAttribute('src');
+    video.load();
   });
 }
 

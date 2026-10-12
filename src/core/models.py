@@ -296,6 +296,7 @@ class Scenario(StudioModel):
   look: Look
   music: BackgroundMusic | None = None
   clips: list[Clip]
+  thumbnail_sec: float | None = pydantic.Field(default=None, ge=0.0)
 
 
 class AnalysisReport(StudioModel):
@@ -324,7 +325,7 @@ class YouTubeRetentionPoint(StudioModel):
 
 
 class YouTubeRetentionPeak(StudioModel):
-  """A high-retention peak or low-retention drop-off span in seconds."""
+  """A high-retention peak span in seconds."""
 
   start_sec: float = pydantic.Field(ge=0.0)
   end_sec: float = pydantic.Field(ge=0.0)
@@ -344,6 +345,26 @@ class YouTubeComment(StudioModel):
   timestamp_sec: float | None = None
 
 
+class YouTubeChapter(StudioModel):
+  """A chapter timestamp and title parsed from a YouTube video description."""
+
+  start_sec: float = pydantic.Field(ge=0.0)
+  title: str = pydantic.Field(min_length=1)
+
+
+class YouTubeShortStat(StudioModel):
+  """Performance metrics of an existing Short on the creator's channel."""
+
+  video_id: str
+  title: str = ''
+  duration_sec: float = 0.0
+  views: int = 0
+  average_view_duration_sec: float = 0.0
+  average_view_percentage: float = 0.0
+  likes: int = 0
+  subscribers_gained: int = 0
+
+
 class YouTubeVideoContext(StudioModel):
   """Creator-owned YouTube data linked to a Source Video.
 
@@ -353,16 +374,18 @@ class YouTubeVideoContext(StudioModel):
 
   video_id: str
   title: str = ''
+  description: str = ''
   published_at: str = ''
   duration_sec: float = 0.0
   view_count: int = 0
   like_count: int = 0
   comment_count: int = 0
   privacy_status: str = 'public'
+  chapters: list[YouTubeChapter] = []
   retention_points: list[YouTubeRetentionPoint] = []
   retention_peaks: list[YouTubeRetentionPeak] = []
-  retention_lows: list[YouTubeRetentionPeak] = []
   comments: list[YouTubeComment] = []
+  channel_shorts: list[YouTubeShortStat] = []
   caption_words: list[TranscriptWord] = []
   caption_line_starts: list[int] = []
   caption_language: str = ''
@@ -378,9 +401,9 @@ class AnalysisResult(StudioModel):
   analysis: AnalysisReport
   silences: list[TimeRange] = []
   youtube_video_id: str = ''
+  chapters: list[YouTubeChapter] = []
   retention_points: list[YouTubeRetentionPoint] = []
   retention_peaks: list[YouTubeRetentionPeak] = []
-  retention_lows: list[YouTubeRetentionPeak] = []
   youtube_comments: list[YouTubeComment] = []
 
 
@@ -673,6 +696,7 @@ class YouTubeVideoList(StudioModel):
   """Videos listed from the signed-in creator's YouTube channel."""
 
   videos: list[YouTubeVideoItem] = []
+  channel_shorts: list[YouTubeShortStat] = []
 
 
 class YouTubeUploadRequest(StudioModel):
@@ -682,6 +706,10 @@ class YouTubeUploadRequest(StudioModel):
   title: str = pydantic.Field(min_length=1, max_length=100)
   description: str = ''
   privacy_status: YouTubePrivacy = 'private'
+  publish_at: str | None = None
+  first_comment: str = ''
+  thumbnail_time_sec: float | None = pydantic.Field(default=None, ge=0.0)
+  thumbnail_asset_id: str | None = None
 
 
 class YouTubeUploadResult(StudioModel):
@@ -689,6 +717,9 @@ class YouTubeUploadResult(StudioModel):
 
   watch_url: str
   studio_url: str
+  comment_posted: bool = False
+  thumbnail_set: bool = False
+  warnings: list[str] = []
 
 
 class StudioConfig(StudioModel):

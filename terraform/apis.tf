@@ -10,7 +10,6 @@ locals {
     "speech.googleapis.com",
     "storage.googleapis.com",
     "youtube.googleapis.com",
-    "youtubereporting.googleapis.com",
     "youtubeanalytics.googleapis.com",
     # Service accounts (iam) and data.google_project (cloudresourcemanager).
     "iam.googleapis.com",

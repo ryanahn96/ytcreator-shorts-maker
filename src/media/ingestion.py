@@ -89,18 +89,12 @@ def _interpolate(
 
 def _spread_ties(starts: list[float], limit: float) -> list[float]:
   """Spreads runs of equal start times evenly up to the next distinct one."""
-  result = list(starts)
-  i = 0
-  while i < len(result):
-    j = i
-    while j + 1 < len(result) and result[j + 1] <= result[i]:
-      j += 1
-    if j > i:
-      upper = result[j + 1] if j + 1 < len(result) else max(limit, result[i])
-      step = (upper - result[i]) / (j - i + 1)
-      for k in range(i + 1, j + 1):
-        result[k] = result[i] + step * (k - i)
-    i = j + 1
+  runs = [list(run) for _, run in itertools.groupby(starts)]
+  result = []
+  for n, run in enumerate(runs):
+    upper = runs[n + 1][0] if n + 1 < len(runs) else max(limit, run[0])
+    step = (upper - run[0]) / len(run)
+    result += [run[0]] + [run[0] + step * k for k in range(1, len(run))]
   return result
 
 
@@ -436,3 +430,86 @@ def probe_asset(
   if duration <= 0:
     raise IngestionError('오디오 길이를 확인할 수 없습니다.')
   return 0, 0, duration, True
+
+
+_THUMB_SCALE = (
+    "scale='min(1080,iw)':'min(1920,ih)'"
+    ':force_original_aspect_ratio=decrease'
+)
+_MAX_THUMB_BYTES = 2 * 1024 * 1024
+
+
+def extract_frame_jpeg(
+    video_path: pathlib.Path,
+    timestamp_sec: float,
+    output_path: pathlib.Path,
+) -> pathlib.Path:
+  """Extracts a <= 2MB JPEG frame from a video at timestamp_sec."""
+  settings = config.get_settings()
+  candidates = (
+      max(0.0, timestamp_sec),
+      max(0.0, timestamp_sec - 0.25),
+      0.0,
+  )
+  for target_sec in dict.fromkeys(candidates):
+    for qscale in ('3', '6', '10'):
+      output_path.unlink(missing_ok=True)
+      proc = _run([
+          settings.ffmpeg_bin,
+          '-nostdin',
+          '-hide_banner',
+          '-y',
+          '-ss',
+          f'{target_sec:.3f}',
+          '-i',
+          str(video_path),
+          '-frames:v',
+          '1',
+          '-vf',
+          _THUMB_SCALE,
+          '-q:v',
+          qscale,
+          str(output_path),
+      ])
+      if not (
+          proc.returncode == 0
+          and output_path.is_file()
+          and output_path.stat().st_size > 0
+      ):
+        break
+      if output_path.stat().st_size <= _MAX_THUMB_BYTES:
+        return output_path
+  raise IngestionError('영상에서 썸네일 프레임을 추출하지 못했습니다.')
+
+
+def prepare_thumbnail_jpeg(
+    image_path: pathlib.Path,
+    output_path: pathlib.Path,
+) -> pathlib.Path:
+  """Normalizes an image file into a <= 2MB JPEG for YouTube thumbnails.set."""
+  settings = config.get_settings()
+  for qscale in ('3', '6', '10'):
+    output_path.unlink(missing_ok=True)
+    proc = _run([
+        settings.ffmpeg_bin,
+        '-nostdin',
+        '-hide_banner',
+        '-y',
+        '-i',
+        str(image_path),
+        '-frames:v',
+        '1',
+        '-vf',
+        _THUMB_SCALE,
+        '-q:v',
+        qscale,
+        str(output_path),
+    ])
+    if (
+        proc.returncode == 0
+        and output_path.is_file()
+        and 0 < output_path.stat().st_size <= _MAX_THUMB_BYTES
+    ):
+      return output_path
+  raise IngestionError('썸네일 이미지를 변환하지 못했습니다.')
+

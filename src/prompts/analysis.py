@@ -47,14 +47,24 @@ DEFAULT_EDITORIAL_PROMPT = """\
 보여주고, centerX와 centerY에는 주요 화자나 피사체의 중심 위치를 넣으세요.
 
 [헤드라인]
-- Scenario마다 영상 내내 고정되는 헤드라인을 쓰세요. 보통 두 줄이며, 필요하면 \
-세 줄까지 써도 됩니다. 첫 줄(강조색)은 주제나 대상을, 다음 줄은 시청자가 \
-끝까지 보게 만드는 궁금증이나 핵심 주장을 담습니다.
-- 각 줄은 한눈에 읽히도록 짧게 쓰고, 영상에 없는 사실은 쓰지 마세요.
+- Scenario마다 영상 상단에 내내 고정되는 2~3줄짜리 실전 Shorts 스타일 \
+헤드라인을 쓰세요. 모바일에서 한눈에 들어오도록 각 줄은 10~15자 안팎으로 짧고 \
+강렬하게 끊어 쓰세요.
+- 첫 줄(강조색)은 시선을 단숨에 끄는 핵심 키워드, 의외의 상황, 또는 화자의 \
+직관적인 한마디로 시작하세요.
+- 둘째 줄(필요하면 셋째 줄)은 시청자가 끝까지 보지 않고는 못 배기게 만드는 \
+반전, 호기심 유발 질문, 통념을 깨는 결론, 또는 결정적 대사를 구어체로 담으세요.
+- 교과서나 보고서 같은 딱딱한 명사형 요약(~의 중요성, ~ 분석)이나 마침표로 \
+끝나는 긴 설명문은 피하세요.
+- 영상에 없는 사실은 쓰지 말고, 댓글·설명에 적힌 타임스탬프(예: 00:14)나 \
+번호 표기는 구간을 찾는 참고로만 쓰고 헤드라인에는 절대 넣지 마세요.
 
 [텍스트]
 - 헤드라인은 영상에서 쓰는 언어로 쓰세요.
-- Scenario 제목, 선정 이유, Clip 목적은 한국어로 쓰세요.
+- Scenario 제목(title)은 실제 YouTube Shorts에 바로 올릴 수 있는 매력적인 \
+클릭 유도형 제목(구어체 훅, 핵심 대사 인용, 강렬한 대비나 궁금증 유발)으로 \
+한국어로 쓰세요. 단순 요약이나 타임스탬프는 넣지 마세요.
+- 선정 이유와 Clip 목적은 한국어로 쓰세요.
 - 화자 이름은 영상에서 확인되는 이름을 쓰고, 알 수 없으면 역할(예: 강연자)로 \
 쓰세요.
 """
@@ -78,13 +88,19 @@ endSec in seconds (e.g. 75.0 for 01:15, or clock strings like "01:15.0").
 - Clips follow each other with hard cuts (picture and sound change at the \
 same instant), so check every boundary: no clip may start or end in the \
 middle of a word or a thought.
-- headline.lines is the scenario's title, shown above the video for the \
-whole short, as short lines from top to bottom. The first line is drawn in \
-a highlight color, the others in the main headline color.
+- title is a catchy, scroll-stopping YouTube Shorts upload title (hook, \
+striking quote, or curiosity gap; never a dry topic label or timestamp).
+- headline.lines is the on-screen banner shown above the video for the \
+whole short (2-3 punchy lines, ~10-15 chars per line). The first line is \
+drawn in a highlight color (hook keyword or context), the others in the \
+main headline color (curiosity gap, twist, or punchline; no timestamps).
 - framingLayout.crop, when the schema asks for it, picks the part of the \
 source frame shown in the video box for the whole scenario. centerX and \
 centerY are normalized coordinates (0..1 from the top-left of the source \
 frame) of the main speaker or subject.
+- thumbnailSec is the source video timestamp in seconds (inside one of the \
+scenario's clips) that makes the strongest visual hook frame for the \
+scenario's thumbnail.
 - Use only facts present in the video or its transcript.
 """
 
@@ -157,64 +173,107 @@ def format_transcript(transcript: models.StoredTranscript) -> str:
   return '\n'.join(lines)
 
 
+TUNED_SECTION_HEADER = '[YouTube 데이터 기반 맞춤 지시]'
+
+
 def format_retention(
     context: models.YouTubeVideoContext | None,
+    editorial_prompt: str = '',
 ) -> list[str]:
-  """Formats YouTube Analytics retention peaks/lows and comments for prompt."""
+  """Formats YouTube Analytics retention, chapters, and comments for prompt."""
   if context is None or (
       not context.retention_peaks
-      and not context.retention_lows
       and not context.comments
+      and not context.chapters
+      and not context.channel_shorts
   ):
     return []
-  lines = [
-      '',
-      '# YouTube Audience Retention & Comments (시청자 유지율 및 댓글 데이터)',
-  ]
-  for spans, tag, header in (
-      (
-          context.retention_peaks,
-          '피크',
+  has_tuned_prompt = TUNED_SECTION_HEADER in editorial_prompt
+  lines = []
+  if not has_tuned_prompt:
+    lines = [
+        '',
+        '# YouTube Audience Retention & Comments (시청자 유지율 및 댓글 데이터)',
+    ]
+    if context.chapters:
+      lines.append(
+          '[롱폼 설명란 챕터 목차] '
+          '원본 영상 설명란에 적힌 챕터 구분입니다. 각 챕터의 주제 전환과 '
+          '구간 경계를 시나리오 기획과 클립 선별에 참고하세요:'
+      )
+      for idx, chapter in enumerate(context.chapters[:25]):
+        end_part = (
+            f' ~ {clock(context.chapters[idx + 1].start_sec)}'
+            if idx + 1 < len(context.chapters)
+            else ''
+        )
+        lines.append(
+            f'- [{chapter.start_sec:.1f}s ({clock(chapter.start_sec)}'
+            f'{end_part})]: {chapter.title}'
+        )
+    if context.retention_peaks:
+      lines.append(
           '[많이 본 구간 — 우선 선별] '
           '시청자가 이탈하지 않고 집중하거나 반복 시청한 아래 피크 구간을 '
           '우선적으로 Shorts의 핵심 Clip이나 첫 도입부(Hook)로 선별하고, 선정 '
           '이유(rationale)와 클립 목적(purpose)에 시청 유지율 근거를 함께 '
-          '적으세요:',
-      ),
-      (
-          context.retention_lows,
-          '이탈',
-          '[적게 본·이탈 구간 — 제외 권장] '
-          '아래 구간은 시청자 유지율이 낮거나 급격히 이탈(Drop-off)한 구간이므로 '
-          'Shorts 클립 선별에서 가급적 제외하세요:',
-      ),
-  ):
-    if not spans:
-      continue
-    lines.append(header)
-    for idx, span in enumerate(spans, start=1):
-      lines.append(
-          f'- {tag} {idx} [{span.start_sec:.1f}s - {span.end_sec:.1f}s '
-          f'({clock(span.start_sec)} ~ {clock(span.end_sec)})]: '
-          f'시청 유지율 {span.watch_ratio:.0%}, '
-          f'상대적 유지 성과 {span.relative_performance:.0%} ({span.label})'
+          '적으세요:'
       )
-  if context.comments:
+      for idx, span in enumerate(context.retention_peaks, start=1):
+        lines.append(
+            f'- 피크 {idx} [{span.start_sec:.1f}s - {span.end_sec:.1f}s '
+            f'({clock(span.start_sec)} ~ {clock(span.end_sec)})]: '
+            f'시청 유지율 {span.watch_ratio:.0%}, '
+            f'상대적 유지 성과 {span.relative_performance:.0%} ({span.label})'
+        )
+    if context.comments:
+      lines.append(
+          '[실제 시청자 댓글 반응] '
+          '시청자들이 공감하거나 타임스탬프로 언급한 포인트입니다. '
+          '타임스탬프는 클립 구간 선별에만 참고하고, 실제 댓글의 생생한 반응과 '
+          '어휘를 Shorts 제목(title)과 상단 헤드라인의 훅(Hook) 문구로 적극 '
+          '활용하세요(단, 00:14 같은 타임스탬프는 제목·헤드라인에 넣지 마세요):'
+      )
+      for comment in context.comments[:8]:
+        snippet = ' '.join(comment.text.splitlines())[:140]
+        ts_tag = (
+            f' [{clock(comment.timestamp_sec)} 언급]'
+            if comment.timestamp_sec is not None
+            else ''
+        )
+        lines.append(
+            f'- ({comment.author}, 좋아요 {comment.like_count}){ts_tag}: '
+            f'{snippet}'
+        )
+  if context.channel_shorts and '[채널 기존 Shorts 성과' not in editorial_prompt:
+    if not lines:
+      lines = ['', '# YouTube Channel Shorts Performance (채널 Shorts 성과)']
     lines.append(
-        '[실제 시청자 댓글 반응] '
-        '시청자들이 공감하거나 타임스탬프로 언급한 포인트입니다. '
-        '시나리오 기획과 헤드라인 작성에 참고하세요:'
+        '[채널 기존 Shorts 성과 (피드백 루프)] '
+        '이 채널에서 반응이 좋았던 기존 Shorts의 제목·길이·시청 지속률 '
+        '패턴입니다. 성과가 검증된 훅 스타일, 제목 길이, 호흡을 시나리오 '
+        '기획과 헤드라인 작성에 반영하세요:'
     )
-    for comment in context.comments[:8]:
-      snippet = ' '.join(comment.text.splitlines())[:140]
-      ts_tag = (
-          f' [{clock(comment.timestamp_sec)} 언급]'
-          if comment.timestamp_sec is not None
+    for idx, stat in enumerate(context.channel_shorts[:8], start=1):
+      dur = f', 길이 {stat.duration_sec:.0f}초' if stat.duration_sec > 0 else ''
+      avd = (
+          f', 평균 시청 {stat.average_view_duration_sec:.1f}초'
+          if stat.average_view_duration_sec > 0
+          else ''
+      )
+      avp = (
+          f' ({stat.average_view_percentage:.0f}%)'
+          if stat.average_view_percentage > 0
+          else ''
+      )
+      subs = (
+          f', 구독 +{stat.subscribers_gained}'
+          if stat.subscribers_gained > 0
           else ''
       )
       lines.append(
-          f'- ({comment.author}, 좋아요 {comment.like_count}){ts_tag}: '
-          f'{snippet}'
+          f'- Shorts {idx} "{stat.title}" (조회수 {stat.views:,}회{dur}'
+          f'{avd}{avp}, 좋아요 {stat.likes:,}{subs})'
       )
   return lines
 
@@ -250,7 +309,7 @@ def build_request_text(
       '# Source Video',
       f'title: {source.title}',
       f'duration: {clock(source.duration_sec)} ({source.duration_sec:.1f}s)',
-      *format_retention(youtube_context),
+      *format_retention(youtube_context, editorial_prompt),
       '',
       '# Transcript',
       _INSTRUCTIONS[kind],
@@ -283,15 +342,6 @@ def _object(properties: dict[str, Any]) -> dict[str, Any]:
   }
 
 
-def _crop() -> dict[str, Any]:
-  return _object(
-      {
-          'centerX': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
-          'centerY': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
-      }
-  )
-
-
 def response_schema(
     include_transcript: bool = True, include_framing: bool = True
 ) -> dict[str, Any]:
@@ -315,21 +365,35 @@ def response_schema(
       'purpose': _string('Why this clip is in the scenario.'),
   }
   scenario_properties: dict[str, Any] = {
-      'title': _string(),
+      'title': _string(
+          'Catchy YouTube Shorts title ready for upload (no timestamps).'
+      ),
       'rationale': _string(),
+      'thumbnailSec': {
+          'type': 'number',
+          'description': (
+              'Source video timestamp in seconds (inside one of the scenario '
+              'clips) for the recommended thumbnail frame.'
+          ),
+      },
       'headline': _object(
           {
               'lines': {
                   'type': 'array',
                   'items': _string(
-                      'One headline line; the first is highlighted.'
+                      'One short, punchy on-screen headline line (first line '
+                      'is highlighted; never include timestamps).'
                   ),
               },
           }
       ),
   }
   if include_framing:
-    scenario_properties['framingLayout'] = _object({'crop': _crop()})
+    centers = {
+        key: {'type': 'number', 'minimum': 0.0, 'maximum': 1.0}
+        for key in ('centerX', 'centerY')
+    }
+    scenario_properties['framingLayout'] = _object({'crop': _object(centers)})
   scenario_properties['clips'] = {
       'type': 'array',
       'items': _object(clip_properties),

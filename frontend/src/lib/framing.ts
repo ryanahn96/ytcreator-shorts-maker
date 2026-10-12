@@ -75,14 +75,8 @@ export function cropRect(region: CropRegion, aspect: number, source: Size): Rect
   const baseHeight = wide ? source.height : source.width / aspect;
   const width = Math.max(2, evenFloor(baseWidth / region.zoom));
   const height = Math.max(2, evenFloor(baseHeight / region.zoom));
-  const x = Math.min(
-    Math.max(region.centerX * source.width - width / 2, 0),
-    source.width - width,
-  );
-  const y = Math.min(
-    Math.max(region.centerY * source.height - height / 2, 0),
-    source.height - height,
-  );
+  const x = clamp(region.centerX * source.width - width / 2, 0, source.width - width);
+  const y = clamp(region.centerY * source.height - height / 2, 0, source.height - height);
   return {x: evenFloor(x), y: evenFloor(y), width, height};
 }
 
@@ -119,18 +113,6 @@ export function videoBox(
   };
 }
 
-/** Border ring width in output pixels; 0 when there is no border. */
-export function borderWidth(
-  lookStyle: LookStyle,
-  framing: FramingLayout,
-  style: TemplateStyle,
-  width: number,
-): number {
-  return framing.fit === 'box' && lookStyle.border
-    ? (lookStyle.borderWidth * width) / style.canvasWidth
-    : 0;
-}
-
 /**
  * Draws one video frame into the template on a canvas of `output` size:
  * background color, the cropped video in its square-cornered box, and the
@@ -161,7 +143,11 @@ export function drawFrame(input: {
     box.width,
     box.height,
   );
-  const ring = borderWidth(lookStyle, framing, style, output.width);
+  // Border ring width in output pixels; 0 when there is no border.
+  const ring =
+    framing.fit === 'box' && lookStyle.border
+      ? (lookStyle.borderWidth * output.width) / style.canvasWidth
+      : 0;
   if (ring > 0) {
     context.beginPath();
     context.rect(

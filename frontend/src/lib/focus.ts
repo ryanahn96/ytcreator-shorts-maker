@@ -31,25 +31,9 @@ export interface FocusRequest {
   target: FocusTarget;
 }
 
-/** The tab of the right panel that edits `target`. */
-export function tabOf(target: FocusTarget): 'captions' | 'style' {
-  return target.kind === 'caption' ? 'captions' : 'style';
-}
-
 /** Scrolls the page so `element` sits mid-screen. */
 export function revealElement(element: Element | null | undefined): void {
   element?.scrollIntoView({behavior: 'smooth', block: 'center'});
-}
-
-/**
- * Reveals and focuses `input` without the focus jump that would cut the
- * smooth scroll short.
- */
-export function revealInput(input: HTMLElement | null | undefined): void {
-  if (input) {
-    revealElement(input);
-    input.focus({preventScroll: true});
-  }
 }
 
 /** The Section named `anchor` (see ui.Section) under `root`. */

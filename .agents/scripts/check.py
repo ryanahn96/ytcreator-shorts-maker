@@ -15,7 +15,6 @@ failure the agent cannot fix never traps it.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import pathlib
 import re
@@ -193,8 +192,6 @@ def hook(payload: dict[str, Any]) -> dict[str, str] | None:
   if payload.get('fullyIdle') is False:
     return None  # Background work will wake the agent up again.
   transcript = pathlib.Path(payload.get('transcriptPath') or '')
-  if not transcript.is_file():
-    return None
   turn, edited = _turn_edits(transcript)
   files = sorted(edited & changed_files())
   if not files:
@@ -208,11 +205,10 @@ def hook(payload: dict[str, Any]) -> dict[str, str] | None:
   except (OSError, json.JSONDecodeError):
     state = {}
   if not isinstance(state, dict) or state.get('turn') != turn:
-    state = {'turn': turn, 'reminders': 0, 'digest': ''}
-  digest = hashlib.sha256('\n'.join(problems).encode('utf-8')).hexdigest()
-  if state['reminders'] >= MAX_REMINDERS or state['digest'] == digest:
+    state = {'turn': turn, 'reminders': 0, 'problems': []}
+  if state['reminders'] >= MAX_REMINDERS or state.get('problems') == problems:
     return None
-  state.update(reminders=state['reminders'] + 1, digest=digest)
+  state.update(reminders=state['reminders'] + 1, problems=problems)
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(json.dumps(state), encoding='utf-8')
   shown = problems[:MAX_SHOWN]

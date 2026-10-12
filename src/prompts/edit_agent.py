@@ -408,7 +408,7 @@ def _retention_line(
   """One retention span with the words it covers and the Clips it overlaps.
 
   Args:
-    span: A peak or low of the retention curve.
+    span: A peak of the retention curve.
     words: The transcript words.
     clips: The source Clips of the Shorts with their Clip Numbers.
 
@@ -460,7 +460,9 @@ def _audience_lines(
     The lines of the audience section.
   """
   if context is None or not (
-      context.retention_peaks or context.retention_lows or context.comments
+      context.retention_peaks
+      or context.comments
+      or context.chapters
   ):
     return ['(연결된 YouTube 데이터 없음)']
   clips = [
@@ -469,18 +471,21 @@ def _audience_lines(
       if clip.media_kind == 'source'
   ]
   lines = []
-  if context.retention_peaks or context.retention_lows:
+  if context.chapters:
+    lines.append('설명란 챕터:')
+    for chapter in context.chapters[:25]:
+      word = words.at(chapter.start_sec)
+      where = f', 시작 단어 [{word.index}]' if word else ''
+      lines.append(f'- {chapter.start_sec:.1f}초{where}: {chapter.title}')
+  if context.retention_peaks:
     lines.append(
         '상대적 유지 성과는 50%가 비슷한 길이 영상의 평균이고, 높을수록 '
         '좋습니다.'
     )
-  for spans, title in (
-      (context.retention_peaks, '많이 본 구간:'),
-      (context.retention_lows, '적게 본 구간:'),
-  ):
-    if spans:
-      lines.append(title)
-    lines += [_retention_line(span, words, clips) for span in spans]
+    lines.append('많이 본 구간:')
+    lines += [
+        _retention_line(span, words, clips) for span in context.retention_peaks
+    ]
   comments = sorted(context.comments, key=lambda item: -item.like_count)
   if comments:
     lines.append('댓글:')

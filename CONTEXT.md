@@ -7,20 +7,21 @@
 화면에서는 _화면 표기_ 가 있는 용어를 그 말로 부른다.
 
 **Source Video**:
-사용자가 올린 원본 롱폼 영상 파일. 분석과 렌더링에 같은 파일을 쓴다. 이미 내 YouTube 채널에 올라가 있는 롱폼 영상(`#shorts`가 없는 영상)이라면 영상 길이와 최신 업로드 날짜를 기준으로 매칭하거나 직접 골라 YouTube Video Context를 연결할 수 있다.
+사용자가 올린 원본 롱폼 영상 파일. 분석과 렌더링에 같은 파일을 쓴다. 이미 내 YouTube 채널에 올라가 있는 롱폼 영상(`#shorts`가 없는 영상)이라면 사용자가 내 채널 영상 목록에서 그 영상을 직접 고르거나 영상 URL·ID를 넣어 YouTube Video Context를 연결할 수 있다.
 _Avoid_: preset video, sample clip, raw media
 
 **YouTube Video Context**:
-로그인한 크리에이터가 Source Video에 연결한 본인 채널 롱폼 영상의 메타데이터(재생 시간, 업로드 날짜, 조회수, 좋아요 수, 댓글 수, 공개 상태), YouTube Analytics 시청자 유지율 곡선(`retentionPoints`), 많이 본 시청 집중 구간(`retentionPeaks`), 적게 본 이탈·저조 구간(`retentionLows`), 실제 시청자 댓글(`comments`), 그리고 공식 자막 트랙(`captionWords`). 시작 화면과 편집 화면 양쪽에서 확인할 수 있으며, 첫 Analysis와 다시 분석 때 Gemini 프롬프트 및 사용자의 Editorial Prompt 튜닝에 활용된다.
-_화면 표기_: 내 채널 영상 연결, 시청자 유지율, 많이 본 구간, 적게 본 구간, 시청자 댓글
+로그인한 크리에이터가 Source Video에 연결한 본인 채널 롱폼 영상의 메타데이터(재생 시간, 업로드 날짜, 조회수, 좋아요 수, 댓글 수, 공개 상태, 설명란), 설명란에서 파싱한 챕터 타임스탬프 목차(`chapters`, 챕터가 없으면 생략), YouTube Analytics 시청자 유지율 곡선(`retentionPoints`), 많이 본 시청 집중 구간(`retentionPeaks`, 영상 앞부분은 유지율이 늘 높아서 낮은 가중치로 고른다), 실제 시청자 댓글(`comments`), 채널의 기존 Shorts 성과 피드백(`channelShorts`, YouTube Analytics API에 데이터가 있을 때 첫 Analysis에만 쓰고 영상 분석 완료 후에는 사용하지 않음), 그리고 공식 자막 트랙(`captionWords`). 연결한 롱폼 영상 데이터는 시작 화면과 편집 화면 양쪽에서 확인할 수 있다. 시작 화면에서 `✨ 데이터로 프롬프트 튜닝`을 누르면 이 데이터가 프롬프트 글에 맞춤 지시문으로 들어가고 `데이터 튜닝 적용됨` 배지가 뜬다. 프롬프트에 이 지시문이 이미 있으면 서버는 중복 첨부를 생략하며, 튜닝 버튼을 누르지 않았을 때는 서버가 자동으로 한 번 붙여 보내므로 동일 데이터는 한 번만 반영된다.
+_화면 표기_: 내 채널 영상 연결, 시청자 유지율, 많이 본 구간, 시청자 댓글, 설명란 챕터 목차, ✨ 데이터로 프롬프트 튜닝, 데이터 튜닝 적용됨
+_Avoid_: Channel pulse, audience bundle
 
 **Transcript Word**:
 원본 음성의 시작 시각과 종료 시각을 가진 최소 단위 발화 단어. 음성 인식(또는 공식 자막)에서 추출해 Source Video 옆에 보관하며, 미리보기 재생 중에는 현재 발화 중인 단어와 대사 줄이 자막 패널에서 실시간으로 강조·추적된다.
 _Avoid_: Atom, token, event, timedtext segment
 
 **Editorial Prompt**:
-Analysis 때 원본 영상에서 어떤 기준으로 구간을 고르고 Scenario를 구성할지 Gemini에게 알려 주는 사용자 지시문. 연결된 YouTube Video Context(많이 본 구간, 적게 본 구간, 시청자 댓글 반응)를 바탕으로 영상 맞춤형 지시문으로 튜닝할 수 있다.
-_화면 표기_: Shorts 생성 프롬프트, 데이터로 프롬프트 튜닝
+Analysis 때 원본 영상에서 어떤 기준으로 구간을 고르고 Scenario를 구성할지 Gemini에게 알려 주는 사용자 지시문. 사용자가 직접 작성하거나, `✨ 데이터로 프롬프트 튜닝`을 눌러 연결된 YouTube Video Context(피크 구간, 챕터, 댓글)를 반영한 맞춤 지시문을 추가해 다듬을 수 있다.
+_화면 표기_: Shorts 생성 프롬프트
 _Avoid_: 편집 요청, System template, rule config
 
 **Analysis**:
@@ -38,7 +39,7 @@ _화면 표기_: "약 $0.21"처럼 금액만
 _Avoid_: 청구액, billing amount
 
 **Scenario**:
-하나의 완결된 Shorts 영상을 이루는 순서 있는 Clip들의 편집 시퀀스.
+하나의 완결된 Shorts 영상을 이루는 순서 있는 Clip들의 편집 시퀀스. Gemini가 추천하는 썸네일 훅 프레임 시각(`thumbnailSec`)을 함께 가진다.
 _화면 표기_: Shorts. 탭마다 Scenario 제목을 붙인다.
 _Avoid_: Preset, template, archetype
 
@@ -106,8 +107,8 @@ Image Overlay, Background Music, 또는 클립 사이 B-roll 삽입(이미지·�
 _Avoid_: Media file, attachment
 
 **Render**:
-Scenario 하나를 Short Template대로 합성해 Shorts MP4 파일 하나로 만드는 일. 완성된 MP4는 파일로 내려받거나 내 YouTube 채널에 Shorts(비공개·일부 공개·공개)로 바로 업로드할 수 있다.
-_화면 표기_: MP4 만들기, YouTube Shorts로 업로드
+Scenario 하나를 Short Template대로 합성해 Shorts MP4 파일 하나로 만드는 일. 완성된 MP4는 파일로 내려받거나 내 YouTube 채널에 Shorts(비공개·일부 공개·공개, 예약 발행 `publishAt`, 커스텀 썸네일 `thumbnails.set`, 첫 댓글 자동 등록 `commentThreads.insert`)로 바로 업로드할 수 있다.
+_화면 표기_: MP4 만들기, YouTube Shorts로 업로드, 썸네일 설정, 예약 발행, 첫 댓글 자동 등록
 _Avoid_: 최종 렌더, 미리보기 렌더, export
 
 **Edit Agent**:

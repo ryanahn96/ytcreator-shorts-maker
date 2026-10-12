@@ -17,11 +17,6 @@ export function formatClock(seconds: number): string {
     : `${pad2(minutes)}:${secs}`;
 }
 
-/** Formats a duration in seconds with one decimal, e.g. "12.3초". */
-export function formatSeconds(seconds: number): string {
-  return `${seconds.toFixed(1)}초`;
-}
-
 /** Formats a byte count in MB. */
 export function formatMegabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -53,12 +48,7 @@ export function formatDuration(seconds: number): string {
   return `${secs}초`;
 }
 
-const USD = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const USD = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'});
 
 /** Formats an estimated cost in USD: "약 $0.21", or "$0.01 미만". */
 export function formatCost(usd: number): string {

@@ -8,6 +8,7 @@ from fastapi import responses
 from src.api import deps
 from src.core import models
 from src.infra import storage
+from src.media import ingestion
 from src.youtube import common as youtube_common
 from src.youtube import shorts_upload
 from src.youtube import video_context
@@ -24,6 +25,10 @@ def youtube_videos(request: fastapi.Request) -> responses.JSONResponse:
     result = videos.list_channel_videos(session.access_token)
   except youtube_common.YouTubeError as exc:
     return deps.error(str(exc), 502)
+  channel_shorts = video_context.fetch_channel_shorts_stats(
+      session.access_token
+  )
+  result = result.model_copy(update={'channel_shorts': channel_shorts})
   return responses.JSONResponse(result.to_json())
 
 
@@ -57,8 +62,46 @@ def youtube_upload(
     return deps.error(str(exc), 404)
   except storage.StorageError as exc:
     return deps.error(str(exc), 500)
+
+  thumb_out = media_path.with_name(f'thumb-{body.render_id}.jpg')
+  thumbnail_path = None
+  pre_warnings: list[str] = []
   try:
-    result = shorts_upload.upload_short(session.access_token, media_path, body)
-  except youtube_common.YouTubeError as exc:
-    return deps.error(str(exc), 502)
+    asset_id = (body.thumbnail_asset_id or '').strip()
+    if asset_id:
+      try:
+        asset, asset_path = deps.workspace.load_asset(asset_id)
+        if asset.kind != 'image':
+          pre_warnings.append('썸네일 파일은 이미지 형식이어야 합니다.')
+        else:
+          thumbnail_path = ingestion.prepare_thumbnail_jpeg(
+              asset_path, thumb_out
+          )
+      except (
+          storage.NotFoundError,
+          storage.StorageError,
+          ingestion.IngestionError,
+      ) as exc:
+        pre_warnings.append(str(exc))
+    elif body.thumbnail_time_sec is not None:
+      try:
+        thumbnail_path = ingestion.extract_frame_jpeg(
+            media_path, body.thumbnail_time_sec, thumb_out
+        )
+      except ingestion.IngestionError as exc:
+        pre_warnings.append(str(exc))
+
+    try:
+      result = shorts_upload.upload_short(
+          session.access_token,
+          media_path,
+          body,
+          thumbnail_path=thumbnail_path,
+          pre_warnings=pre_warnings,
+      )
+    except youtube_common.YouTubeError as exc:
+      return deps.error(str(exc), 502)
+  finally:
+    thumb_out.unlink(missing_ok=True)
   return responses.JSONResponse(result.to_json())
+

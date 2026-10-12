@@ -67,10 +67,6 @@ def read_seconds(value: Any) -> float | None:
   return read_number(value)
 
 
-def clamp(value: float, low: float, high: float) -> float:
-  return min(max(value, low), high)
-
-
 def ms(seconds: float) -> float:
   return round(seconds, 3)
 

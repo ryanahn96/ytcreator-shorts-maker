@@ -34,6 +34,13 @@ _MAX_CHUNK_SEC = 55.0
 _MIN_CHUNK_RATIO = 0.4
 _MAX_WORKERS = 8
 _SENTENCE_ENDINGS = ('.', '?', '!', '。', '？', '！')
+# Chirp 3 sometimes times the first sentence of a chunk that opens with
+# music at the chunk head. A first line starting within _HEAD_SLACK_SEC of
+# the chunk start and followed by a gap of _HEAD_GAP_SEC or more is
+# recognized again over that gap.
+_HEAD_SLACK_SEC = 0.5
+_HEAD_GAP_SEC = 3.0
+_RETRY_MIN_STEP_SEC = 1.0
 
 
 class SpeechError(RuntimeError):
@@ -430,6 +437,124 @@ class _SpeechSession:
     return parse_recognize_results(results, chunk.start_sec)
 
 
+def shifted_head(
+    words: Sequence[tuple[str, float, float]],
+    line_starts: Sequence[int],
+    chunk: models.TimeRange,
+) -> tuple[int, float, float] | None:
+  """Finds a first line that Chirp 3 may have pulled to the chunk head.
+
+  Args:
+    words: Absolute (word, start_sec, end_sec) spans of one chunk.
+    line_starts: Line-start word indices of the same chunk.
+    chunk: The audio chunk the words came from.
+
+  Returns:
+    (word count of the first line, gap start, gap end), or None when the
+    first line does not look shifted.
+  """
+  if not words or words[0][1] - chunk.start_sec > _HEAD_SLACK_SEC:
+    return None
+  count = next((i for i in line_starts if i > 0), len(words))
+  low = words[count - 1][2]
+  high = words[count][1] if count < len(words) else chunk.end_sec
+  if high - low < _HEAD_GAP_SEC:
+    return None
+  return count, low, high
+
+
+def retry_starts(
+    low: float, high: float, silences: Sequence[models.TimeRange]
+) -> list[float]:
+  """Window starts to retry over [low, high]: low, then silence ends."""
+  starts = [low]
+  for silence in silences:
+    end = silence.end_sec
+    if (
+        low < end < high - _RETRY_MIN_STEP_SEC
+        and end - starts[-1] >= _RETRY_MIN_STEP_SEC
+    ):
+      starts.append(end)
+  return starts
+
+
+def _letters(words: Sequence[tuple[str, float, float]]) -> str:
+  return ''.join(ch for text, _, _ in words for ch in text if ch.isalnum())
+
+
+def matching_run(
+    target: Sequence[tuple[str, float, float]],
+    words: Sequence[tuple[str, float, float]],
+) -> list[tuple[str, float, float]] | None:
+  """Finds the run of words that spells target, ignoring spaces and marks.
+
+  Args:
+    target: The words to look for.
+    words: The words to search.
+
+  Returns:
+    The matching contiguous run of `words`, or None.
+  """
+  goal = _letters(target)
+  for first in range(len(words)):
+    for last in range(first + 1, len(words) + 1):
+      letters = _letters(words[first:last])
+      if letters == goal:
+        return list(words[first:last])
+      if len(letters) >= len(goal):
+        break
+  return None
+
+
+def recognize_with_head_check(
+    session: Any,
+    media_path: pathlib.Path,
+    chunk: models.TimeRange,
+    silences: Sequence[models.TimeRange],
+) -> tuple[list[tuple[str, float, float]], list[int]]:
+  """Recognizes a chunk and re-times a first line pulled to its head.
+
+  The gap after a suspicious first line is recognized again, starting at
+  the gap start and then at each silence end. Only the run of retry words
+  that spells the same line is taken, so noise heard in the gap is never
+  added. The first run that does not sit at its window head wins, else the
+  last run found; the original words stay when no retry repeats the line.
+
+  Args:
+    session: An object with `recognize_chunk(media_path, chunk)`.
+    media_path: Path to the uploaded Source Video file.
+    chunk: The audio chunk to recognize.
+    silences: Measured silent ranges of the whole video.
+
+  Returns:
+    A tuple of (word spans, relative line-start word indices).
+  """
+  words, line_starts = session.recognize_chunk(media_path, chunk)
+  head = shifted_head(words, line_starts, chunk)
+  if head is None:
+    return words, line_starts
+  count, low, high = head
+  found: list[tuple[str, float, float]] | None = None
+  for start in retry_starts(low, high, silences):
+    window = models.TimeRange(
+        start_sec=round(start, 3), end_sec=round(high, 3)
+    )
+    retry_words, _ = session.recognize_chunk(media_path, window)
+    run = matching_run(words[:count], retry_words)
+    if run is None:
+      continue
+    found = run
+    if run[0][1] - window.start_sec > _HEAD_SLACK_SEC:
+      break
+  if found is None:
+    return words, line_starts
+  shift = len(found) - count
+  return (
+      found + list(words[count:]),
+      [0] + [i + shift for i in line_starts if i >= count],
+  )
+
+
 def transcribe_video(
     media_path: pathlib.Path,
     duration_sec: float,
@@ -465,11 +590,13 @@ def transcribe_video(
       languages=settings.speech_languages,
   )
   try:
-    workers = min(_MAX_WORKERS, len(chunks))
-    with futures.ThreadPoolExecutor(max_workers=workers) as pool:
+    with futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
       chunk_outputs = list(
           pool.map(
-              lambda chunk: session.recognize_chunk(media_path, chunk), chunks
+              lambda chunk: recognize_with_head_check(
+                  session, media_path, chunk, silences
+              ),
+              chunks,
           )
       )
   finally:

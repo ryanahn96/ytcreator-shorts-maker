@@ -218,11 +218,6 @@ function insertClip(
   };
 }
 
-/** The Look at `clipId`, falling back to the shared Look. */
-function lookAt(scenario: Scenario, clipId: string | null): Look {
-  return scenario.clips.find((clip) => clip.clipId === clipId)?.look ?? scenario.look;
-}
-
 /** Puts `look` at `clipId` if that Clip has its own Look, else shares it. */
 function withLook(state: EditorState, clipId: string | null, look: Look): EditorState {
   const scenario = currentScenario(state);
@@ -356,7 +351,8 @@ export function editorReducer(
     case 'setLook':
       return withLook(state, action.clipId, action.look);
     case 'addImage': {
-      const look = lookAt(currentScenario(state), action.clipId);
+      const owner = clips.find((clip) => clip.clipId === action.clipId);
+      const look = owner?.look ?? currentScenario(state).look;
       const image: ImageOverlay = {
         ...action.image,
         overlayId: `image-${state.createdImages + 1}`,
@@ -416,21 +412,15 @@ export function editorReducer(
       return {...state, cutWords};
     }
     case 'setWordsCut': {
-      const changes = action.wordIndices.filter(
-        (index) => state.cutWords.has(index) !== action.cut,
-      );
-      if (changes.length === 0) {
-        return state;
-      }
       const cutWords = new Set(state.cutWords);
-      for (const index of changes) {
+      for (const index of action.wordIndices) {
         if (action.cut) {
           cutWords.add(index);
         } else {
           cutWords.delete(index);
         }
       }
-      return {...state, cutWords};
+      return cutWords.size === state.cutWords.size ? state : {...state, cutWords};
     }
     case 'setCaptionMaxChars': {
       const maxChars = Math.max(4, Math.min(40, Math.round(action.maxChars)));

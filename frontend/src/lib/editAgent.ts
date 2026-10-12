@@ -32,6 +32,7 @@ import type {
   EditOperation,
   EditRequest,
   EditResponse,
+  EditTurnPayload,
   ImageOverlay,
   Look,
   LookPatch,
@@ -80,10 +81,7 @@ const LABELS: Record<OperationName, string> = {
 };
 
 /** One Edit Request of this editor session and what came of it. */
-export interface EditTurn {
-  request: string;
-  reply: string;
-  operations: EditOperation[];
+export interface EditTurn extends Omit<EditTurnPayload, 'undone'> {
   /** The undo step the answer became; null when it changed nothing. */
   stepId: number | null;
 }
@@ -245,7 +243,7 @@ function patchedLook(
 /** Applies the operations of one answer, in order, to a working state. */
 class Applier {
   state: EditorState;
-  readonly notes: string[] = [];
+  readonly notes = new Set<string>();
   /** The note of the first skipped operation; also in `notes`. */
   firstSkip = '';
   /** What the one-line summary tells besides the answer's reply. */
@@ -275,14 +273,8 @@ class Applier {
     return this.scenario.clips;
   }
 
-  note(text: string): void {
-    if (!this.notes.includes(text)) {
-      this.notes.push(text);
-    }
-  }
-
   private skipNote(text: string): void {
-    this.note(text);
+    this.notes.add(text);
     this.firstSkip ||= text;
   }
 
@@ -439,13 +431,11 @@ class Applier {
    * selected; null when no Clip changed.
    */
   finish(): number | null {
-    if (this.alsoOwn.size > 0) {
-      const numbers = this.clips.flatMap((clip, index) =>
-        this.alsoOwn.has(clip.clipId) ? [index + 1] : [],
-      );
-      if (numbers.length > 0) {
-        this.summary.push(`자기 스타일이 있는 ${numbers.join(', ')}번 클립에도 적용했어요.`);
-      }
+    const numbers = this.clips.flatMap((clip, index) =>
+      this.alsoOwn.has(clip.clipId) ? [index + 1] : [],
+    );
+    if (numbers.length > 0) {
+      this.summary.push(`자기 스타일이 있는 ${numbers.join(', ')}번 클립에도 적용했어요.`);
     }
     if (!this.clipsChanged || this.clips.length === 0) {
       return null;
@@ -516,7 +506,7 @@ class Applier {
     if (Math.abs(startSec - wanted) > 1e-3) {
       const edge = startSec < wanted ? '끝' : '처음';
       const moved = Number(Math.abs(startSec - clip.startSec).toFixed(2));
-      this.note(`${LABELS.shiftClip}: 영상 ${edge}에 닿아 ${moved}초만 옮겼어요.`);
+      this.notes.add(`${LABELS.shiftClip}: 영상 ${edge}에 닿아 ${moved}초만 옮겼어요.`);
     }
     this.setRange(operation, index, {startSec, endSec: Math.min(limit, startSec + length)});
   }
@@ -526,7 +516,7 @@ class Applier {
     const wanted = clip.startSec + operation.durationSec;
     const endSec = Math.min(this.limit(clip), wanted);
     if (endSec < wanted - 1e-3) {
-      this.note(`${LABELS.setClipDuration}: 영상 끝까지만 늘렸어요.`);
+      this.notes.add(`${LABELS.setClipDuration}: 영상 끝까지만 늘렸어요.`);
     }
     this.setRange(operation, index, {startSec: clip.startSec, endSec});
   }
@@ -664,7 +654,7 @@ class Applier {
   private putPatched(clipId: string | null, look: Look, patch: LookPatch): void {
     const patched = patchedLook(look, patch, this.context.config);
     if (patched.boxFitted) {
-      this.note(`영상 박스는 가로세로 ${MIN_VIDEO_BOX} 이상, 화면 안이어야 해서 맞췄어요.`);
+      this.notes.add(`영상 박스는 가로세로 ${MIN_VIDEO_BOX} 이상, 화면 안이어야 해서 맞췄어요.`);
     }
     this.run({type: 'setLook', clipId, look: patched.look});
   }
@@ -856,7 +846,7 @@ export function applyEditReply(
           : applier.firstSkip
             ? `요청한 편집을 적용하지 못했어요. ${applier.firstSkip}`
             : '이미 요청한 대로라 바뀐 값이 없어요.',
-      notes: applier.notes,
+      notes: [...applier.notes],
       focusClipIndex: null,
     };
   }
@@ -870,7 +860,7 @@ export function applyEditReply(
     state,
     changed: true,
     reply: [answer.reply, ...summary].filter((text) => text !== '').join(' '),
-    notes: applier.notes,
+    notes: [...applier.notes],
     focusClipIndex,
   };
 }

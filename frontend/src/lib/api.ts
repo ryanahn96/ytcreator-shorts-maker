@@ -161,14 +161,10 @@ export async function analyze(
   for (;;) {
     const {value, done} = await reader.read();
     buffer += decoder.decode(value, {stream: !done});
-    let newline = buffer.indexOf('\n');
-    while (newline >= 0) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (line) {
-        onEvent(parseEvent(line));
-      }
-      newline = buffer.indexOf('\n');
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines.map((text) => text.trim()).filter(Boolean)) {
+      onEvent(parseEvent(line));
     }
     if (done) {
       return;
@@ -239,7 +235,7 @@ export async function uploadSource(
   file: File,
   onProgress: (loadedBytes: number) => void,
   signal: AbortSignal,
-  meta?: LocalVideoMetadata,
+  meta: LocalVideoMetadata,
 ): Promise<UploadedSource> {
   const contentType = file.type || 'video/mp4';
   const init = await requestJson<UploadInitResponse>(
@@ -259,9 +255,7 @@ export async function uploadSource(
       sourceId: init.sourceId,
       filename: file.name,
       sizeBytes: file.size,
-      durationSec: meta?.durationSec ?? 0,
-      width: meta?.width ?? 0,
-      height: meta?.height ?? 0,
+      ...meta,
     };
     return requestJson<UploadedSource>(
       '/upload-source/complete',

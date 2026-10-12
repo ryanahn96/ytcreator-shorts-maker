@@ -14,7 +14,7 @@
 import {Fragment, useRef, useState, type CSSProperties, type PointerEvent} from 'react';
 
 import {type StageHit} from '../../lib/focus';
-import {cssFontSize, fontStack, rgba} from '../../lib/fonts';
+import {fontStack, rgba} from '../../lib/fonts';
 import {clampVideoBox, MIN_VIDEO_BOX, videoBox} from '../../lib/framing';
 import {type LookEdit} from '../../lib/look';
 import type {
@@ -147,10 +147,9 @@ export function OverlayLayer(props: {
       last = move(from, to);
       setDraft(last);
     };
+    const listening = new AbortController();
     const finish = (released: boolean) => {
-      target.removeEventListener('pointermove', onMove);
-      target.removeEventListener('pointerup', onUp);
-      target.removeEventListener('pointercancel', onCancel);
+      listening.abort();
       setDraft(null);
       if (last) {
         commit(last);
@@ -158,11 +157,10 @@ export function OverlayLayer(props: {
         click();
       }
     };
-    const onUp = () => finish(true);
-    const onCancel = () => finish(false);
-    target.addEventListener('pointermove', onMove);
-    target.addEventListener('pointerup', onUp);
-    target.addEventListener('pointercancel', onCancel);
+    const {signal} = listening;
+    target.addEventListener('pointermove', onMove, {signal});
+    target.addEventListener('pointerup', () => finish(true), {signal});
+    target.addEventListener('pointercancel', () => finish(false), {signal});
   };
 
   const dragVideoBox = (
@@ -337,7 +335,7 @@ export function OverlayLayer(props: {
       width: unit(width),
       bottom: unit(style.canvasHeight - placement.y),
       fontFamily: fontStack(textStyle.fontId),
-      fontSize: unit(cssFontSize(props.fonts.get(textStyle.fontId), textStyle.size)),
+      fontSize: unit(textStyle.size * (props.fonts.get(textStyle.fontId)?.emPerLineBox ?? 1)),
       lineHeight: unit(textStyle.size),
       textWrap: 'balance',
       // libass breaks lines at spaces only; CSS would also break between

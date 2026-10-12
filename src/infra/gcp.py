@@ -63,7 +63,7 @@ def is_service_enabled(project_id: str, service_name: str) -> bool:
   if key in _ENABLED_SERVICES:
     return True
 
-  # In managed container environments (such as Cloud Run where K_SERVICE is set),
+  # In managed container environments (such as Cloud Run with K_SERVICE set),
   # services are provisioned declaratively via Terraform, and the runtime
   # service account intentionally lacks Service Usage Viewer/Admin permissions.
   if os.environ.get('K_SERVICE'):

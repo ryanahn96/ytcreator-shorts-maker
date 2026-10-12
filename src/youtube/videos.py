@@ -36,7 +36,7 @@ def parse_iso_duration(raw: str) -> float:
   return hours * 3600.0 + minutes * 60.0 + seconds
 
 
-def _has_shorts_tag(title: str, description: str, tags: Sequence[str]) -> bool:
+def has_shorts_tag(title: str, description: str, tags: Sequence[str]) -> bool:
   """Returns True when title, description, or tags contain #shorts/#쇼츠."""
   haystack = f'{title}\n{description}'.lower()
   if '#shorts' in haystack or '#쇼츠' in haystack:
@@ -178,7 +178,7 @@ def list_channel_videos(access_token: str) -> models.YouTubeVideoList:
         video = video_item(raw)
         raw_tags = common.as_dict(raw.get('snippet')).get('tags')
         tags = raw_tags if isinstance(raw_tags, list) else []
-        if not _has_shorts_tag(video.title, video.description, tags):
+        if not has_shorts_tag(video.title, video.description, tags):
           videos.append(video)
     videos.sort(key=lambda item: item.published_at, reverse=True)
   return models.YouTubeVideoList(videos=videos[:40])
