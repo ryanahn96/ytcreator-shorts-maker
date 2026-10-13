@@ -494,10 +494,8 @@ def _fetch_channel_shorts_stats(
       if not isinstance(raw, dict):
         continue
       item = videos.video_item(raw, untitled='')
-      raw_tags = common.as_dict(raw.get('snippet')).get('tags')
-      tags = raw_tags if isinstance(raw_tags, list) else []
       is_short = videos.has_shorts_tag(
-          item.title, item.description, tags
+          item.title, item.description, item.tags
       ) or (0.0 < item.duration_sec <= 65.0)
       meta[item.video_id] = (item.title, item.duration_sec, is_short)
 

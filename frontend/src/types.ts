@@ -282,6 +282,7 @@ export interface YouTubeVideoItem {
   videoId: string;
   title: string;
   description: string;
+  tags?: string[];
   thumbnailUrl: string;
   publishedAt: string;
   durationSec: number;

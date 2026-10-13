@@ -285,10 +285,15 @@ function VideoClipEditor(props: {
   const commit = (range: TimeRange) => {
     setDraft(null);
     const endSec = Math.min(maxDuration, roundMs(range.endSec));
+    // The start stays inside the file, with room for the shortest clip.
+    const startSec = Math.min(
+      roundMs(range.startSec),
+      roundMs(maxDuration - settings.minSubcutSec),
+    );
     dispatch({
       type: 'setClipRange',
       index,
-      range: {startSec: roundMs(range.startSec), endSec},
+      range: {startSec, endSec},
     });
   };
 

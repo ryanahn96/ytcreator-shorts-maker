@@ -862,7 +862,8 @@ def build_ffmpeg_args(
     The argument list.
 
   Raises:
-    CompositionError: If an image, video or music file is not available.
+    CompositionError: If an image, video or music file is not available, or
+      a video Clip ends past the end of its file.
   """
   frame = 1.0 / timeline.fps
   args = [paths.ffmpeg_bin, '-nostdin', '-hide_banner', '-y']
@@ -872,6 +873,11 @@ def build_ffmpeg_args(
     if plan_clip.media_kind == 'image':
       asset_file = _asset_path(paths.assets, plan_clip.asset_id or '')
       duration = (window_end - window_start) + frame
+      if asset_file.endswith('.gif'):
+        # -loop belongs to image2, which maps no codec to .gif, so the gif
+        # decoder is named. It reads the first frame, the still the preview
+        # draws.
+        args += ['-f', 'image2', '-c:v', 'gif']
       args += [
           '-loop',
           '1',
@@ -891,6 +897,11 @@ def build_ffmpeg_args(
           if asset_info and asset_info.duration_sec > 0
           else window_end + frame
       )
+      if window_end > max_dur + frame:
+        raise CompositionError(
+            f'Clip {clip.plan_index + 1}의 구간 끝({window_end:.2f}s)이 삽입 '
+            f'영상 길이({max_dur:.2f}s)를 벗어납니다.'
+        )
       duration = max(frame, min(window_end + frame, max_dur) - window_start)
       args += [
           '-ss',

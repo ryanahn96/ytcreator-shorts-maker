@@ -682,6 +682,7 @@ class YouTubeVideoItem(StudioModel):
   video_id: str
   title: str
   description: str = ''
+  tags: list[str] = []
   thumbnail_url: str = ''
   published_at: str = ''
   duration_sec: float = 0.0

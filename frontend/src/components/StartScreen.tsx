@@ -14,7 +14,14 @@ import {
   getYouTubeVideoContext,
   listYouTubeVideos,
 } from '../lib/api';
-import {formatClock, formatLength, formatMegabytes, PRIVACY_LABELS} from '../lib/format';
+import {
+  formatClock,
+  formatLength,
+  formatMegabytes,
+  formatPublishedDate,
+  PRIVACY_LABELS,
+} from '../lib/format';
+import {searchVideos, type Marked} from '../lib/videoSearch';
 import type {
   YouTubeRetentionPeak,
   YouTubeRetentionPoint,
@@ -39,7 +46,7 @@ const VIDEO_SUFFIXES = ['.mp4', '.mov', '.m4v', '.mkv', '.webm'];
 // A linked video whose length differs from the file by more than this gets
 // a warning.
 const DURATION_TOLERANCE_SEC = 2.0;
-const TUNED_SECTION_HEADER = '[YouTube 데이터 기반 맞춤 지시]';
+export const TUNED_SECTION_HEADER = '[YouTube 데이터 기반 맞춤 지시]';
 
 function isVideoFile(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -77,20 +84,6 @@ function parseYouTubeVideoId(input: string): string {
   return raw;
 }
 
-function formatPublishedDate(iso: string | undefined): string {
-  if (!iso) {
-    return '';
-  }
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return iso.slice(0, 10);
-  }
-  const yyyy = parsed.getFullYear();
-  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-  const dd = String(parsed.getDate()).padStart(2, '0');
-  return `${yyyy}.${mm}.${dd}`;
-}
-
 function formatPrivacyLabel(privacy: string | undefined): string {
   switch (privacy) {
     case 'public':
@@ -103,7 +96,7 @@ function formatPrivacyLabel(privacy: string | undefined): string {
 }
 
 /** Injects or updates the data-driven editorial instruction block in prompt. */
-function buildDataTunedPrompt(
+export function buildDataTunedPrompt(
   currentPrompt: string,
   context: YouTubeVideoContext,
 ): string {
@@ -215,12 +208,33 @@ export function RetentionSparkline(props: {
   );
 }
 
+/** Text with the spans the channel video search matched marked. */
+function Highlighted(props: Marked) {
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const [start, end] of props.spans) {
+    parts.push(
+      props.text.slice(at, start),
+      <mark
+        key={start}
+        className="rounded-sm bg-primary-container text-on-primary-container"
+      >
+        {props.text.slice(start, end)}
+      </mark>,
+    );
+    at = end;
+  }
+  parts.push(props.text.slice(at));
+  return <>{parts}</>;
+}
+
 function YouTubeChannelLinkSection(props: {
   videoId: string;
   durationSec: number;
   hasUploadedFile: boolean;
   onChange: (videoId: string) => void;
   onTunePrompt: (context: YouTubeVideoContext) => void;
+  onContextChange: (context: YouTubeVideoContext | null) => void;
 }) {
   const {videoId, durationSec, hasUploadedFile, onChange, onTunePrompt} = props;
   const [isOpen, setIsOpen] = useState(false);
@@ -228,6 +242,7 @@ function YouTubeChannelLinkSection(props: {
   const [loadingList, setLoadingList] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState(videoId);
+  const [query, setQuery] = useState('');
   const [context, setContext] = useState<YouTubeVideoContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
@@ -291,8 +306,15 @@ function YouTubeChannelLinkSection(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, durationSec]);
 
+  // Studio keeps the loaded context to tune the 다시 분석 prompt later.
+  useEffect(() => {
+    props.onContextChange(context);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context]);
+
   const selectedItem =
     videos?.find((item) => item.videoId === videoId) ?? null;
+  const hits = videos ? searchVideos(videos, query) : [];
   const linkedDurationSec =
     context?.durationSec || selectedItem?.durationSec || 0;
   const lengthGapSec = Math.abs(linkedDurationSec - durationSec);
@@ -528,11 +550,36 @@ function YouTubeChannelLinkSection(props: {
             </p>
           ) : (
             <div className="space-y-2">
-              <span className="block text-xs font-medium text-on-surface">
-                내 채널 영상 ({videos.length}개)
-              </span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-xs font-medium text-on-surface tabular-nums">
+                  {query.trim()
+                    ? `검색 결과 ${hits.length}개 / 전체 ${videos.length}개`
+                    : `내 채널 영상 (${videos.length}개)`}
+                </span>
+                <div className="relative min-w-56 flex-1">
+                  <Icon
+                    name="search"
+                    size={18}
+                    className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant"
+                  />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="제목, 설명, 태그, 날짜로 검색"
+                    aria-label="내 채널 영상 검색"
+                    className={`${TEXT_FIELD} w-full ps-9`}
+                  />
+                </div>
+              </div>
+              {hits.length === 0 && (
+                <p className="text-xs text-on-surface-variant">
+                  검색 결과가 없습니다. 목록에 없는 영상은 위 URL 입력 칸에
+                  주소를 넣어 연결하세요.
+                </p>
+              )}
               <div className="grid max-h-[460px] grid-cols-1 gap-3 overflow-y-auto pr-1">
-                {videos.map((item) => {
+                {hits.map(({item, title, date, extra}) => {
                   const selected = item.videoId === videoId;
                   return (
                     <div
@@ -557,6 +604,7 @@ function YouTubeChannelLinkSection(props: {
                           <img
                             src={item.thumbnailUrl}
                             alt={item.title}
+                            loading="lazy"
                             referrerPolicy="no-referrer"
                             className="h-full w-full object-cover"
                           />
@@ -592,7 +640,7 @@ function YouTubeChannelLinkSection(props: {
 
                         <div className="flex items-start justify-between gap-2">
                           <p className="line-clamp-2 text-sm font-semibold sm:text-base">
-                            {item.title}
+                            <Highlighted {...title} />
                           </p>
                           <a
                             href={`https://www.youtube.com/watch?v=${item.videoId}`}
@@ -605,11 +653,17 @@ function YouTubeChannelLinkSection(props: {
                             <Icon name="open_in_new" size={16} />
                           </a>
                         </div>
+                        {extra && (
+                          <p className="truncate text-xs opacity-85">
+                            {`${extra.label}: `}
+                            <Highlighted {...extra.marked} />
+                          </p>
+                        )}
 
                         <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs opacity-85 tabular-nums">
                           {item.publishedAt && (
                             <span>
-                              {formatPublishedDate(item.publishedAt)}
+                              <Highlighted {...date} />
                             </span>
                           )}
                           <span>
@@ -775,6 +829,13 @@ function FileCard(props: {
           {upload.error}
         </Notice>
       )}
+      {upload.noPicture && (
+        <Notice tone="warning" className="mt-5">
+          이 브라우저는 이 영상의 화면을 재생하지 못해요(HEVC 등). 분석과 MP4
+          만들기는 되지만 편집 화면 미리보기에는 화면 없이 소리만 나와요.
+          미리보기가 필요하면 H.264 MP4로 바꿔 올리세요.
+        </Notice>
+      )}
       {props.children}
     </div>
   );
@@ -788,6 +849,7 @@ export function StartScreen(props: {
   onPromptChange: (value: string) => void;
   youtubeVideoId: string;
   onYoutubeVideoIdChange: (videoId: string) => void;
+  onYoutubeContextChange: (context: YouTubeVideoContext | null) => void;
   /** Non-empty when the server cannot call Gemini. */
   setupError: string;
   /** The last analysis failure, kept until dismissed. */
@@ -853,6 +915,7 @@ export function StartScreen(props: {
         hasUploadedFile={upload.status !== 'empty'}
         onChange={props.onYoutubeVideoIdChange}
         onTunePrompt={handleTunePrompt}
+        onContextChange={props.onYoutubeContextChange}
       />
       <details
         open={promptOpen}

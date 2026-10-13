@@ -165,12 +165,13 @@ def as_float(value: Any) -> float | None:
     return None
 
 
-def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
+def _parse_seconds(value: Any) -> float | None:
   """Parses a timestamp into seconds on the video timeline.
 
   Accepts floats/ints, numeric strings ("75.5"), clock strings ("01:15.5",
-  "1:15"), bracketed/unit strings ("75s", "[01:15]"), as well as MMSS
-  representation (e.g. 610 for 6:10 when duration_sec < 610) and milliseconds.
+  "1:15") and bracketed/unit strings ("75s", "[01:15]"). A number is seconds,
+  as the schema asks; a value past the video's end is clamped by the caller,
+  not reread as MMSS or milliseconds.
   """
   if isinstance(value, str):
     value = value.strip().strip('[]() ')
@@ -187,23 +188,7 @@ def _parse_seconds(value: Any, duration_sec: float = 0.0) -> float | None:
         value = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
       else:
         return None
-  num = as_float(value)
-  if num is None:
-    return None
-
-  if duration_sec > 0 and num > duration_sec:
-    # Check MMSS representation (e.g. 610 for 06:10 -> 370s, 830 -> 510s).
-    if num >= 100:
-      mins = int(num) // 100
-      secs = num - (mins * 100)
-      if secs < 60:
-        candidate = mins * 60.0 + secs
-        if candidate <= duration_sec:
-          return candidate
-    # Check milliseconds representation (e.g. 75000ms -> 75s).
-    if num >= 1000 and (num / 1000.0) <= duration_sec:
-      return num / 1000.0
-  return num
+  return as_float(value)
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -404,6 +389,8 @@ async def run_gemini(
   costs: list[float | None] = []
   structured = True
   failures: collections.Counter[str] = collections.Counter()
+  # The API is switched on at most once per run; a 403 after that is final.
+  enable_tried = False
   for model in settings.model_chain:
     cached = await cache.for_model(model) if cache is not None else None
     attempt = 0
@@ -444,19 +431,24 @@ async def run_gemini(
         ) from exc
       except genai_errors.ClientError as exc:
         if exc.code in _AUTH_ERROR_CODES:
+          # Only a disabled API is worth switching on. An IAM denial also
+          # names aiplatform.googleapis.com, so that name is not a sign.
           if (
               settings.gemini_backend == 'vertex'
               and exc.code == 403
+              and not enable_tried
               and (
-                  'aiplatform.googleapis.com' in exc.message
-                  or 'Agent Platform API' in exc.message
+                  'Agent Platform API' in exc.message
                   or 'is disabled' in exc.message
                   or 'has not been used' in exc.message
               )
           ):
+            enable_tried = True
             await emit(progress('gemini'))
-            if gcp.enable_service(
-                settings.vertex_project, gcp.VERTEX_API_SERVICE
+            if await asyncio.to_thread(
+                gcp.enable_service,
+                settings.vertex_project,
+                gcp.VERTEX_API_SERVICE,
             ):
               await asyncio.sleep(3.0)
               attempt -= 1
@@ -532,22 +524,16 @@ def _headline(raw: Any) -> models.Headline:
   return models.Headline(lines=[line for line in lines if line])
 
 
-def _clip_time(
-    raw_clip: dict[str, Any], duration_sec: float, *keys: str
-) -> float | None:
-  seconds = (_parse_seconds(raw_clip.get(key), duration_sec) for key in keys)
+def _clip_time(raw_clip: dict[str, Any], *keys: str) -> float | None:
+  seconds = (_parse_seconds(raw_clip.get(key)) for key in keys)
   return next((value for value in seconds if value is not None), None)
 
 
 def _seconds_range(
     raw_clip: dict[str, Any], duration_sec: float
 ) -> tuple[float, float] | None:
-  start = _clip_time(
-      raw_clip, duration_sec, 'startSec', 'start_sec', 'start', 'startTime'
-  )
-  end = _clip_time(
-      raw_clip, duration_sec, 'endSec', 'end_sec', 'end', 'endTime'
-  )
+  start = _clip_time(raw_clip, 'startSec', 'start_sec', 'start', 'startTime')
+  end = _clip_time(raw_clip, 'endSec', 'end_sec', 'end', 'endTime')
   if start is None or end is None:
     return None
   if start > end:
@@ -568,10 +554,8 @@ def _transcript_from_answer(data: dict[str, Any]) -> ingestion.Transcript:
   )
   for raw_line in as_list(raw_lines):
     entry = as_dict(raw_line)
-    start = _clip_time(
-        entry, 0.0, 'startSec', 'start_sec', 'start', 'startTime'
-    )
-    end = _clip_time(entry, 0.0, 'endSec', 'end_sec', 'end', 'endTime')
+    start = _clip_time(entry, 'startSec', 'start_sec', 'start', 'startTime')
+    end = _clip_time(entry, 'endSec', 'end_sec', 'end', 'endTime')
     text = clean_text(entry.get('text'))
     if start is not None and end is not None and text:
       if start > end:
@@ -602,14 +586,10 @@ def _transcript_from_answer(data: dict[str, Any]) -> ingestion.Transcript:
 
 
 def _resolve_thumbnail_sec(
-    scenario: dict[str, Any],
-    clips: list[models.Clip],
-    duration_sec: float,
+    scenario: dict[str, Any], clips: list[models.Clip]
 ) -> float:
   """Resolves a Scenario's recommended thumbnailSec inside its Clips."""
-  raw_sec = _clip_time(
-      scenario, duration_sec, 'thumbnailSec', 'thumbnail_sec', 'thumbnail'
-  )
+  raw_sec = _clip_time(scenario, 'thumbnailSec', 'thumbnail_sec', 'thumbnail')
   if raw_sec is None:
     upper = max(clips[0].start_sec, clips[0].end_sec - 0.05)
     return round(min(upper, clips[0].start_sec + 0.5), 3)
@@ -662,7 +642,7 @@ def _build_scenarios(
             scenario_id=f's{s_number}',
             title=clean_text(scenario.get('title')) or label,
             rationale=clean_text(scenario.get('rationale')),
-            thumbnail_sec=_resolve_thumbnail_sec(scenario, clips, duration_sec),
+            thumbnail_sec=_resolve_thumbnail_sec(scenario, clips),
             look=models.Look(
                 headline=_headline(scenario.get('headline')),
                 framing_layout=_framing(scenario.get('framingLayout')),
