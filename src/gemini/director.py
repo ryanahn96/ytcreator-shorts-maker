@@ -404,6 +404,8 @@ async def run_gemini(
   costs: list[float | None] = []
   structured = True
   failures: collections.Counter[str] = collections.Counter()
+  # The API is switched on at most once per run; a 403 after that is final.
+  enable_tried = False
   for model in settings.model_chain:
     cached = await cache.for_model(model) if cache is not None else None
     attempt = 0
@@ -444,19 +446,24 @@ async def run_gemini(
         ) from exc
       except genai_errors.ClientError as exc:
         if exc.code in _AUTH_ERROR_CODES:
+          # Only a disabled API is worth switching on. An IAM denial also
+          # names aiplatform.googleapis.com, so that name is not a sign.
           if (
               settings.gemini_backend == 'vertex'
               and exc.code == 403
+              and not enable_tried
               and (
-                  'aiplatform.googleapis.com' in exc.message
-                  or 'Agent Platform API' in exc.message
+                  'Agent Platform API' in exc.message
                   or 'is disabled' in exc.message
                   or 'has not been used' in exc.message
               )
           ):
+            enable_tried = True
             await emit(progress('gemini'))
-            if gcp.enable_service(
-                settings.vertex_project, gcp.VERTEX_API_SERVICE
+            if await asyncio.to_thread(
+                gcp.enable_service,
+                settings.vertex_project,
+                gcp.VERTEX_API_SERVICE,
             ):
               await asyncio.sleep(3.0)
               attempt -= 1

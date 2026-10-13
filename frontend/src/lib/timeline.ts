@@ -387,9 +387,10 @@ export function resolveScenario(input: {
     const mediaKind: ClipMediaKind = clip.mediaKind ?? 'source';
     const source = mediaKind === 'source';
     const words = source ? wordsStartingIn(transcript.words, clip) : [];
+    // A media clip exactly minSubcutSec long stays despite float error.
     const subcuts: TimeRange[] = source
       ? clipSubcuts({range: clip, words, edits, pauses, settings})
-      : clip.endSec - clip.startSec >= settings.minSubcutSec && clip.assetId
+      : clip.endSec - clip.startSec >= settings.minSubcutSec - 1e-9 && clip.assetId
         ? [{startSec: clip.startSec, endSec: clip.endSec}]
         : [];
     const planIndex = subcuts.length > 0 ? planClips.length : null;
