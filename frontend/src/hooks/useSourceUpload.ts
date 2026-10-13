@@ -114,7 +114,10 @@ export function useSourceUpload() {
     setState({status: 'empty'});
   }, [release]);
 
-  useEffect(() => release, [release]);
+  // Unmounting stops an unfinished upload but keeps the object URL: in dev,
+  // Fast Refresh runs this cleanup again while the editor still plays the
+  // file, and a URL left behind only lasts until the page closes.
+  useEffect(() => () => controller.current?.abort(), []);
 
   return {state, upload, clear};
 }

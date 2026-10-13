@@ -9,6 +9,11 @@ import httpx
 from src.core import models
 from src.youtube import common
 
+# The channel video list, and the studio's search over it, covers the newest
+# _MAX_UPLOAD_PAGES * 50 uploads (Shorts included before the filter).
+_MAX_UPLOAD_PAGES = 10
+
+
 def parse_iso_duration(raw: str) -> float:
   """Parses a YouTube ISO-8601 duration (e.g. 'PT14M23S') into seconds."""
   text = raw.strip().upper()
@@ -64,11 +69,14 @@ def video_item(
   content = common.as_dict(raw.get('contentDetails'))
   stats = common.as_dict(raw.get('statistics'))
   status = common.as_dict(raw.get('status'))
+  raw_tags = snippet.get('tags')
+  tags = raw_tags if isinstance(raw_tags, list) else []
   fallback_title = vid if untitled is None else untitled
   return models.YouTubeVideoItem(
       video_id=vid,
       title=str(snippet.get('title') or fallback_title).strip(),
       description=str(snippet.get('description') or '').strip(),
+      tags=[str(tag).strip() for tag in tags],
       thumbnail_url=common.thumbnail_url(
           snippet.get('thumbnails'),
           ('maxres', 'standard', 'high', 'medium', 'default'),
@@ -84,7 +92,12 @@ def video_item(
 
 
 def list_channel_videos(access_token: str) -> models.YouTubeVideoList:
-  """Lists uploaded long-form videos (without #shorts) sorted by upload date."""
+  """Lists the long-form videos (no #shorts) among the newest uploads.
+
+  Returns:
+    Every long-form video in the newest _MAX_UPLOAD_PAGES pages of the
+    uploads playlist, newest first.
+  """
   headers = common.auth_headers(access_token)
   with common.http_client() as client:
     try:
@@ -114,7 +127,7 @@ def list_channel_videos(access_token: str) -> models.YouTubeVideoList:
 
     video_ids: list[str] = []
     page_token = ''
-    for _ in range(2):
+    for _ in range(_MAX_UPLOAD_PAGES):
       pl_params: dict[str, str | int] = {
           'part': 'contentDetails',
           'playlistId': uploads_id,
@@ -176,9 +189,7 @@ def list_channel_videos(access_token: str) -> models.YouTubeVideoList:
         if not isinstance(raw, dict):
           continue
         video = video_item(raw)
-        raw_tags = common.as_dict(raw.get('snippet')).get('tags')
-        tags = raw_tags if isinstance(raw_tags, list) else []
-        if not has_shorts_tag(video.title, video.description, tags):
+        if not has_shorts_tag(video.title, video.description, video.tags):
           videos.append(video)
     videos.sort(key=lambda item: item.published_at, reverse=True)
-  return models.YouTubeVideoList(videos=videos[:40])
+  return models.YouTubeVideoList(videos=videos)

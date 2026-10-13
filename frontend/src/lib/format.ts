@@ -33,6 +33,18 @@ export function formatLength(seconds: number): string {
     : `${minutes}:${pad2(secs)}`;
 }
 
+/** Formats an ISO timestamp as a local date, e.g. "2024.05.13". */
+export function formatPublishedDate(iso: string | undefined): string {
+  if (!iso) {
+    return '';
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return iso.slice(0, 10);
+  }
+  return `${parsed.getFullYear()}.${pad2(parsed.getMonth() + 1)}.${pad2(parsed.getDate())}`;
+}
+
 /** Formats a duration in words: "45초", "3분 12초", "1시간 2분". */
 export function formatDuration(seconds: number): string {
   const total = Math.round(Math.max(0, seconds));

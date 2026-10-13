@@ -9,12 +9,21 @@ import {useCallback, useState} from 'react';
 import {useAnalysis} from '../hooks/useAnalysis';
 import {useAssets} from '../hooks/useAssets';
 import {useSourceUpload} from '../hooks/useSourceUpload';
-import type {AnalysisResult, ReanalyzeMode, StudioConfig} from '../types';
+import type {
+  AnalysisResult,
+  ReanalyzeMode,
+  StudioConfig,
+  YouTubeVideoContext,
+} from '../types';
 import {AnalyzingScreen} from './AnalyzingScreen';
 import {AppHeader, CreatorBadge} from './AppHeader';
 import {EditorScreen} from './EditorScreen';
 import {ReanalyzeDialog} from './ReanalyzeDialog';
-import {StartScreen} from './StartScreen';
+import {
+  buildDataTunedPrompt,
+  StartScreen,
+  TUNED_SECTION_HEADER,
+} from './StartScreen';
 import {Button, Dialog, Snackbar} from './ui';
 
 /** One analysis result being edited; a new result starts a new session. */
@@ -29,6 +38,8 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
   const assets = useAssets();
   const [prompt, setPrompt] = useState(config.defaultEditorialPrompt);
   const [youtubeVideoId, setYoutubeVideoId] = useState('');
+  const [youtubeContext, setYoutubeContext] =
+    useState<YouTubeVideoContext | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [dialog, setDialog] = useState<'reanalyze' | 'newVideo' | null>(null);
   const onResult = useCallback((result: AnalysisResult) => {
@@ -51,10 +62,19 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
       });
     }
   };
+  // 다시 분석 opens with the YouTube data block when a channel video is
+  // linked, even if 데이터로 프롬프트 튜닝 was not pressed before the first run.
+  const reanalyzePrompt =
+    youtubeContext !== null &&
+    youtubeContext.videoId === youtubeVideoId.trim() &&
+    !prompt.includes(TUNED_SECTION_HEADER)
+      ? buildDataTunedPrompt(prompt, youtubeContext)
+      : prompt;
   const startNew = () => {
     analysis.cancel();
     upload.clear();
     setYoutubeVideoId('');
+    setYoutubeContext(null);
     setSession(null);
     setDialog(null);
   };
@@ -77,7 +97,7 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
         />
         {dialog === 'reanalyze' && (
           <ReanalyzeDialog
-            prompt={prompt}
+            prompt={reanalyzePrompt}
             defaultPrompt={config.defaultEditorialPrompt}
             onClose={closeDialog}
             onStart={(draft, mode) => {
@@ -129,6 +149,7 @@ export function Studio(props: {config: StudioConfig; onLogout: () => void}) {
           onPromptChange={setPrompt}
           youtubeVideoId={youtubeVideoId}
           onYoutubeVideoIdChange={setYoutubeVideoId}
+          onYoutubeContextChange={setYoutubeContext}
           setupError={config.geminiSetupError}
           analysisError={failure}
           onDismissError={analysis.dismiss}
