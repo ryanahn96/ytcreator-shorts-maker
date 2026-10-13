@@ -775,6 +775,13 @@ function FileCard(props: {
           {upload.error}
         </Notice>
       )}
+      {upload.noPicture && (
+        <Notice tone="warning" className="mt-5">
+          이 브라우저는 이 영상의 화면을 재생하지 못해요(HEVC 등). 분석과 MP4
+          만들기는 되지만 편집 화면 미리보기에는 화면 없이 소리만 나와요.
+          미리보기가 필요하면 H.264 MP4로 바꿔 올리세요.
+        </Notice>
+      )}
       {props.children}
     </div>
   );

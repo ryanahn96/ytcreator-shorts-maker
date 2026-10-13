@@ -12,6 +12,8 @@ import type {LocalVideoMetadata, UploadedSource} from '../types';
 interface LocalFile {
   file: File;
   objectUrl: string;
+  /** The browser plays the sound but cannot show the picture (e.g. HEVC). */
+  noPicture?: boolean;
 }
 
 export type UploadState =
@@ -70,8 +72,16 @@ export function useSourceUpload() {
       const local: LocalFile = {file, objectUrl: url};
       setState({status: 'uploading', loadedBytes: 0, ...local});
       probeLocalVideo(url)
-        .then((meta) =>
-          uploadSource(
+        .then((meta) => {
+          // Metadata without a picture size: the editor preview would play
+          // the sound over a black frame.
+          local.noPicture = meta.durationSec > 0 && meta.width === 0;
+          setState((current) =>
+            current.status === 'uploading' && isSameFile(current, url)
+              ? {...current, noPicture: local.noPicture}
+              : current,
+          );
+          return uploadSource(
             file,
             (loadedBytes) =>
               setState((current) =>
@@ -81,8 +91,8 @@ export function useSourceUpload() {
               ),
             abort.signal,
             meta,
-          ),
-        )
+          );
+        })
         .then((source) =>
           setState((current) =>
             isSameFile(current, url) ? {status: 'ready', source, ...local} : current,
